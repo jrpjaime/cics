@@ -5,8 +5,8 @@ import lombok.Data;
 
 @Data
 @Builder  
-public class CicsNssResponse {
-    private String nss;
+public class CicsDatosResponse {
+    private String datoEntrada;
     private String cicsResponse;
     private String errorMessage;
     private long elapsedTimeMs;

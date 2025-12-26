@@ -38,8 +38,7 @@ public class CicsService implements Serializable {
 
 	@Autowired
 	private ComunicacionCICS comunicacionCICS;
-
-    // INYECTAMOS DIRECTAMENTE GenericObjectPool (ahora el bean está registrado con este tipo)
+ 
     @Autowired
     private GenericObjectPool<JavaGateway> cicsGatewayPool;
 
@@ -47,82 +46,85 @@ public class CicsService implements Serializable {
 		super();
 	}
 
-	private String enviarMensajeCics(String cadenaEnviada, String servidor, String usuario, String password, String programa, String transaccion) {
-
-		//logger.info("enviarMensajeCics - Usando pool de conexiones");
-		//logger.info("usuario: " + usuario);
-
-		String respuestaCics = "";
-		int codRet = 0;
-		ECIRequest req = new ECIRequest();
-		ECIRequestBean parametros = new ECIRequestBean();
+	    private String enviarMensajeCics(String cadenaEnviada, String servidor, String usuario, String password, String programa, String transaccion) {
+        String respuestaCics = "";
         JavaGateway jg = null;
 
-		try {
+        try {
             jg = cicsGatewayPool.borrowObject();
-            logger.debug("Obtenida instancia de JavaGateway del pool. Activas: {}, Inactivas: {}, En espera: {}",
-                    cicsGatewayPool.getNumActive(), cicsGatewayPool.getNumIdle(), cicsGatewayPool.getNumWaiters());
+            
+            // 1. Creamos el Bean de parámetros (DTO Limpio)
+            ECIRequestBean parametros = new ECIRequestBean();
+            
+            // 2. Creamos el Canal usando el Service (No el Bean)
+            // CORRECCIÓN: Ahora pasamos los dos parámetros requeridos
+            Channel requestChannel = comunicacionCICS.creaCanal(cadenaEnviada, parametros.getChannelName());
 
-			Channel requestChannel = comunicacionCICS.creaCanal(cadenaEnviada);
+            // 3. Poblamos el Bean
+            parametros.setCallType(ECIRequest.ECI_SYNC);
+            parametros.setServer(servidor);
+            parametros.setUser(usuario.toUpperCase());
+            parametros.setPassword(password.toUpperCase());
+            parametros.setProgram(programa);
+            parametros.setTransaction(transaccion);
+            parametros.setChannel(requestChannel); // Asignamos el canal creado
+            parametros.setModoExtendido(ECIRequest.ECI_NO_EXTEND);
+            parametros.setLuwID(ECIRequest.ECI_LUW_NEW);
 
-			parametros.setCallType(ECIRequest.ECI_SYNC);
-			parametros.setServer(servidor);
-			parametros.setUser(usuario.toUpperCase());
-			parametros.setPassword(password.toUpperCase());
-			parametros.setProgram(programa);
-			parametros.setTransaction(transaccion);
-			parametros.setChannel(requestChannel);
+            // 4. Ejecución
+            ECIRequest req = new ECIRequest();
+            comunicacionCICS.asignaParametros(req, parametros);
+            comunicacionCICS.enviaSolicitud(jg, req);
 
-			parametros.setModoExtendido(ECIRequest.ECI_NO_EXTEND);
-			parametros.setLuwID(ECIRequest.ECI_LUW_NEW);
+            respuestaCics = comunicacionCICS.traeRespuestaCanal(req);
+            imprimirSeparador(comunicacionCICS.traeCodigoRespuesta(req));
 
-			comunicacionCICS.asignaParametros(req, parametros);
-			comunicacionCICS.enviaSolicitud(jg, req);
-
-			respuestaCics = comunicacionCICS.traeRespuestaCanal(req).toString();
-			codRet = comunicacionCICS.traeCodigoRespuesta(req);
-
-			imprimirSeparador(codRet);
-		} catch (Exception e) {
-			logger.error("Error en enviarMensajeCics: {}", e.getMessage(), e);
-            if (jg != null) {
-                try {
-                    cicsGatewayPool.invalidateObject(jg);
-                    jg = null;
-                    logger.warn("Instancia de JavaGateway invalidada del pool debido a un error.");
-                } catch (Exception invalidateE) {
-                    logger.error("Error al invalidar JavaGateway en el pool: {}", invalidateE.getMessage(), invalidateE);
-                }
+        } catch (Exception e) {
+            logger.error("Error en enviarMensajeCics: {}", e.getMessage());
+            if (jg != null && e.getMessage().contains("CTG")) {
+                invalidatePoolObject(jg);
+                jg = null;
             }
-			throw new RuntimeException("Fallo al comunicarse con CICS", e);
-		} finally {
+            throw new RuntimeException("Fallo en comunicación CICS", e);
+        } finally {
             if (jg != null) {
-                try {
-                    cicsGatewayPool.returnObject(jg);
-                    logger.debug("Instancia de JavaGateway devuelta al pool. Activas: {}, Inactivas: {}, En espera: {}",
-                            cicsGatewayPool.getNumActive(), cicsGatewayPool.getNumIdle(), cicsGatewayPool.getNumWaiters());
-                } catch (Exception e) {
-                    logger.error("Error al devolver JavaGateway al pool: {}", e.getMessage(), e);
-                }
+                try { cicsGatewayPool.returnObject(jg); } catch (Exception e) { logger.error("Error al retornar al pool"); }
             }
         }
-		return respuestaCics;
-	}
+        return respuestaCics;
+    }
+
+
+    /**
+     * Método auxiliar para limpiar el pool cuando una conexión falla
+     */
+    private void invalidatePoolObject(JavaGateway jg) {
+        if (jg != null) {
+            try {
+                logger.warn("Invalidando instancia de JavaGateway defectuosa en el pool.");
+                cicsGatewayPool.invalidateObject(jg);
+            } catch (Exception ex) {
+                logger.error("No se pudo invalidar el objeto en el pool: {}", ex.getMessage());
+            }
+        }
+    }
 
 	// ... (Resto de los métodos y getters/setters sin cambios)
+  
     public String enviaReciveCadena(String cadenaEnviar, String usuario, String password, String programa, String transaccion) {
         String respuestaCICS;
         DateFormat dateFormat = new SimpleDateFormat("yyyy/MM/dd HH:mm:ss");
         Date date = new Date();
         String fechaActual = dateFormat.format(date);
 
-        logger.info("[" + fechaActual + "]: IP-" + ctgServer + " | SERV-" + serverName + " | PROG:" + programa + "/TRANS:" + transaccion);
-        logger.info(">>SEND:" + cadenaEnviar);
+        logger.debug("[" + fechaActual + "]: IP-" + ctgServer + " | SERV-" + serverName + " | PROG:" + programa + "/TRANS:" + transaccion);
+        logger.debug(">>SEND:" + cadenaEnviar);
 
         respuestaCICS = limpiarAsteriscos(enviarMensajeCics(cadenaEnviar, serverName, usuario, password, programa, transaccion));
 
         return respuestaCICS;
     }
+     
 
     private String decodificarCodigoRespuesta (int codigo){
         switch (codigo){
@@ -224,4 +226,8 @@ public class CicsService implements Serializable {
     public String getServerName() {
         return serverName;
     }
+
+
+
+
 }

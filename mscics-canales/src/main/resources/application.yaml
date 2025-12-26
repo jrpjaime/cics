@@ -30,7 +30,7 @@ ea01:
 
 app:
   cics:
-    # Número máximo de hilos simultáneos para procesar NSS
+    # Número máximo de hilos simultáneos para procesar Datos
     thread-pool-size: 1000
 
     # Ejemplo de valores predeterminados para CICS

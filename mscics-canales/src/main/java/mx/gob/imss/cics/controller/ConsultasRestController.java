@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import mx.gob.imss.cics.dto.CicsConcurrentRequest;
-import mx.gob.imss.cics.dto.CicsNssResponse;
+import mx.gob.imss.cics.dto.CicsDatosResponse;
 import mx.gob.imss.cics.dto.CicsRequest;
 import mx.gob.imss.cics.dto.CicsTotalConcurrentResponse;
 import mx.gob.imss.cics.service.CicsConsultasService;
@@ -83,17 +83,17 @@ public class ConsultasRestController {
 
 
 
-	    // Nuevo endpoint para procesamiento concurrente de NSS
+	    // Nuevo endpoint para procesamiento concurrente de Dato
     @PostMapping("/consultarCicsConcurrente")
-    public ResponseEntity<List<CicsNssResponse>> consultarCicsConcurrente(@RequestBody CicsConcurrentRequest request) {
-        //logger.info("Recibida solicitud para consultar CICS concurrentemente para {} NSS.", request.getNssList().size());
-        if (request.getNssList() == null || request.getNssList().isEmpty()) {
+    public ResponseEntity<List<CicsDatosResponse>> consultarCicsConcurrente(@RequestBody CicsConcurrentRequest request) {
+        //logger.info("Recibida solicitud para consultar CICS concurrentemente para {} Dato.", request.getDatosEntradaList().size());
+        if (request.getDatosEntradaList() == null || request.getDatosEntradaList().isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
         }
 
         try {
-            List<CicsNssResponse> responses = cicsConsultasService.procesarNssConcurrentemente(
-                    request.getNssList(),
+            List<CicsDatosResponse> responses = cicsConsultasService.procesarConcurrentemente(
+                    request.getDatosEntradaList(),
                     request.getUsuario(),
                     request.getPassword(),
                     request.getPrograma(),
@@ -101,11 +101,11 @@ public class ConsultasRestController {
             );
             return new ResponseEntity<>(responses, HttpStatus.OK);
         } catch (InterruptedException | ExecutionException e) {
-            logger.error("Error durante el procesamiento concurrente de NSS: {}", e.getMessage(), e);
+            logger.error("Error durante el procesamiento concurrente de Dato: {}", e.getMessage(), e);
             // Podrías devolver un mensaje de error más específico si quieres
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         } catch (Exception e) {
-            logger.error("Error inesperado durante el procesamiento concurrente de NSS: {}", e.getMessage(), e);
+            logger.error("Error inesperado durante el procesamiento concurrente de Dato: {}", e.getMessage(), e);
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);
         }
     }
@@ -114,31 +114,31 @@ public class ConsultasRestController {
 
 
 
-	    // Nuevo endpoint para procesamiento concurrente de NSS
+	    // Nuevo endpoint para procesamiento concurrente de Dato
     @PostMapping("/consultarCicsConcurrentetiempo")
     public ResponseEntity<CicsTotalConcurrentResponse> consultarCicsConcurrentetiempo(@RequestBody CicsConcurrentRequest request) {
-       // logger.info("Recibida solicitud para consultar CICS concurrentemente para {} NSS.", request.getNssList().size());
-        if (request.getNssList() == null || request.getNssList().isEmpty()) {
+       // logger.info("Recibida solicitud para consultar CICS concurrentemente para {} Dato.", request.getDatosEntradaList().size());
+        if (request.getDatosEntradaList() == null || request.getDatosEntradaList().isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST); // Retornamos BAD_REQUEST con el tipo de respuesta adecuado
         }
 
         long totalTiempoInicio = System.currentTimeMillis(); // Iniciar contador de tiempo total
-        List<CicsNssResponse> responses = new ArrayList<>();
+        List<CicsDatosResponse> responses = new ArrayList<>();
         String errorMessage = null;
 
         try {
-            responses = cicsConsultasService.procesarNssConcurrentemente(
-                    request.getNssList(),
+            responses = cicsConsultasService.procesarConcurrentemente(
+                    request.getDatosEntradaList(),
                     request.getUsuario(),
                     request.getPassword(),
                     request.getPrograma(),
                     request.getTransaccion()
             );
         } catch (InterruptedException | ExecutionException e) {
-            logger.error("Error durante el procesamiento concurrente de NSS: {}", e.getMessage(), e);
+            logger.error("Error durante el procesamiento concurrente de Dato: {}", e.getMessage(), e);
             errorMessage = "Error durante el procesamiento concurrente: " + e.getMessage();
         } catch (Exception e) {
-            logger.error("Error inesperado durante el procesamiento concurrente de NSS: {}", e.getMessage(), e);
+            logger.error("Error inesperado durante el procesamiento concurrente de Dato: {}", e.getMessage(), e);
             errorMessage = "Error inesperado: " + e.getMessage();
         }
 
@@ -147,11 +147,11 @@ public class ConsultasRestController {
 
         // Formatear el tiempo total
         String totalElapsedTimeFormatted = formatElapsedTime(totalElapsedTimeMs);
-        logger.info("Tiempo total de procesamiento concurrente para {} NSS: {}", responses.size(), totalElapsedTimeFormatted);
+        logger.info("Tiempo total de procesamiento concurrente para {} Dato(s): {}", responses.size(), totalElapsedTimeFormatted);
 
         // Calcular la longitud total de las respuestas (opcional)
         long totalResponseLengthBytes = 0;
-        for (CicsNssResponse res : responses) {
+        for (CicsDatosResponse res : responses) {
             if (res.getCicsResponse() != null) {
                 totalResponseLengthBytes += res.getCicsResponse().getBytes(StandardCharsets.UTF_8).length;
             }
@@ -182,27 +182,27 @@ public class ConsultasRestController {
 
     @PostMapping("/consultarCicsConcurrentetiempoerrores")
     public ResponseEntity<CicsTotalConcurrentResponse> consultarCicsConcurrentetiempoerrores(@RequestBody CicsConcurrentRequest request) {
-        if (request.getNssList() == null || request.getNssList().isEmpty()) {
+        if (request.getDatosEntradaList() == null || request.getDatosEntradaList().isEmpty()) {
             return new ResponseEntity<>(HttpStatus.BAD_REQUEST); 
         }
 
         long totalTiempoInicio = System.currentTimeMillis(); 
-        List<CicsNssResponse> responses = new ArrayList<>();
+        List<CicsDatosResponse> responses = new ArrayList<>();
         String errorMessage = null;
 
         try {
-            responses = cicsConsultasService.procesarNssConcurrentemente(
-                    request.getNssList(),
+            responses = cicsConsultasService.procesarConcurrentemente(
+                    request.getDatosEntradaList(),
                     request.getUsuario(),
                     request.getPassword(),
                     request.getPrograma(),
                     request.getTransaccion()
             );
         } catch (InterruptedException | ExecutionException e) {
-            logger.error("Error durante el procesamiento concurrente de NSS: {}", e.getMessage(), e);
+            logger.error("Error durante el procesamiento concurrente de Dato: {}", e.getMessage(), e);
             errorMessage = "Error durante el procesamiento concurrente: " + e.getMessage();
         } catch (Exception e) {
-            logger.error("Error inesperado durante el procesamiento concurrente de NSS: {}", e.getMessage(), e);
+            logger.error("Error inesperado durante el procesamiento concurrente de Dato: {}", e.getMessage(), e);
             errorMessage = "Error inesperado: " + e.getMessage();
         }
 
@@ -211,13 +211,13 @@ public class ConsultasRestController {
 
         // Formatear el tiempo total
         String totalElapsedTimeFormatted = formatElapsedTime(totalElapsedTimeMs);
-        logger.info("Tiempo total de procesamiento concurrente para {} NSS: {}", responses.size(), totalElapsedTimeFormatted);
+        logger.info("Tiempo total de procesamiento concurrente para {} Dato(s): {}", responses.size(), totalElapsedTimeFormatted);
 
         // Calcular la longitud total de las respuestas y contar errores
         long totalResponseLengthBytes = 0;
         int totalErrors = 0; // Contador de errores
 
-        for (CicsNssResponse res : responses) {
+        for (CicsDatosResponse res : responses) {
             // Sumar bytes si la respuesta no es nula
             if (res.getCicsResponse() != null) {
                 totalResponseLengthBytes += res.getCicsResponse().getBytes(StandardCharsets.UTF_8).length;
@@ -225,7 +225,7 @@ public class ConsultasRestController {
             
             // Lógica para contar errores:
             // Se asume error si getErrorMessage() tiene texto O si cicsResponse es nulo.
-            // Ajusta 'getErrorMessage()' según el nombre real de tu campo en el DTO CicsNssResponse
+            // Ajusta 'getErrorMessage()' según el nombre real de tu campo en el DTO CicsDatosResponse
             if (res.getErrorMessage() != null || res.getCicsResponse() == null) {
                 totalErrors++;
             }
@@ -233,7 +233,7 @@ public class ConsultasRestController {
 
         String totalResponseLengthFormatted = formatResponseLength(totalResponseLengthBytes);
         logger.info("Longitud total de las respuestas (UTF-8): {} ({})", totalResponseLengthBytes, totalResponseLengthFormatted);
-        logger.info("Total de NSS con Error: {}", totalErrors);
+        logger.info("Total de Datos con Error: {}", totalErrors);
 
         // Construir la respuesta final agregando el total de errores
         CicsTotalConcurrentResponse totalResponse = CicsTotalConcurrentResponse.builder()

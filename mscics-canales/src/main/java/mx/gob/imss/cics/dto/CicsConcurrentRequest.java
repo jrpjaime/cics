@@ -5,7 +5,7 @@ import java.util.List;
 
 @Data
 public class CicsConcurrentRequest {
-    private List<String> nssList; // Lista de Números de Seguridad Social
+    private List<String> datosEntradaList; // Lista de Números de Seguridad Social
     private String usuario;       // Opcional, si no se usan los default
     private String password;      // Opcional
     private String programa;      // Opcional

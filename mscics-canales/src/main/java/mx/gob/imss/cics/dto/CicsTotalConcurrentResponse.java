@@ -7,7 +7,7 @@ import java.util.List;
 @Data
 @Builder
 public class CicsTotalConcurrentResponse {
-    private List<CicsNssResponse> individualResponses;
+    private List<CicsDatosResponse> individualResponses;
     private long totalElapsedTimeMs;
     private String totalElapsedTimeFormatted;
     private long totalResponseLengthBytes; // Longitud total de todas las respuestas combinadas (opcional)
