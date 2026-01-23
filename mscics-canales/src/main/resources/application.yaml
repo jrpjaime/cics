@@ -22,7 +22,7 @@ management:
 ctg:
   ipaddress: tcp://10.100.68.137
   port: 1425
-  servername: CICS04DS
+  servername: CICSIPIC
 
 # Configuración de versión
 ea01:

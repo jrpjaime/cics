@@ -14,6 +14,9 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger; 
 import org.springframework.stereotype.Service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import mx.gob.imss.cics.dto.CicsDatosJsonResponse;
 import mx.gob.imss.cics.dto.CicsDatosResponse;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -45,6 +48,9 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
     @Autowired
     @Qualifier("cicsTaskExecutor")
     private Executor taskExecutor;
+
+    @Autowired
+    private ObjectMapper objectMapper; 
 
 
     @Override
@@ -115,5 +121,108 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
         } 
         //  EL BLOQUE FINALLY CON SHUTDOWN: El ciclo de vida del executor ahora lo maneja Spring.
     }
+
+
+@Override
+public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
+        List<String> datosEntradaList,
+        String usuario,
+        String password,
+        String programa,
+        String transaccion) throws InterruptedException, ExecutionException {
+
+    logger.info("Iniciando procesamiento concurrente JSON para {} registros.", datosEntradaList.size());
+
+    // 1. Determinar parámetros efectivos
+    final String effUser = (usuario != null && !usuario.isEmpty()) ? usuario : defaultUser;
+    final String effPass = (password != null && !password.isEmpty()) ? password : defaultPassword;
+    final String effProg = (programa != null && !programa.isEmpty()) ? programa : defaultPrograma;
+    final String effTrans = (transaccion != null && !transaccion.isEmpty()) ? transaccion : defaultTransaccion;
+
+    try {
+        List<CompletableFuture<CicsDatosJsonResponse>> futures = new ArrayList<>();
+
+        for (String dato : datosEntradaList) {
+            CompletableFuture<CicsDatosJsonResponse> future = CompletableFuture.supplyAsync(() -> {
+                long startTime = System.currentTimeMillis();
+                String rawResponse = null;
+                String header = null;
+                Object jsonParsed = null;
+                String errorMessage = null;
+
+                try {
+                    // Llamada al servicio CICS
+                    rawResponse = cicsService.enviaReciveCadena(dato, effUser, effPass, effProg, effTrans);
+
+                    if (rawResponse != null && !rawResponse.trim().isEmpty()) {
+                        // Mejora de seguridad: Detectar el inicio de un objeto { o un arreglo [
+                        int jsonStartIndex = rawResponse.indexOf("{");
+                        int arrayStartIndex = rawResponse.indexOf("[");
+
+                        int firstCharIndex = -1;
+                        // Lógica para encontrar cuál de los dos símbolos aparece primero
+                        if (jsonStartIndex >= 0 && arrayStartIndex >= 0) {
+                            firstCharIndex = Math.min(jsonStartIndex, arrayStartIndex);
+                        } else if (jsonStartIndex >= 0) {
+                            firstCharIndex = jsonStartIndex;
+                        } else if (arrayStartIndex >= 0) {
+                            firstCharIndex = arrayStartIndex;
+                        }
+
+                        if (firstCharIndex >= 0) {
+                            // Separar el encabezado de texto de la estructura JSON
+                            header = rawResponse.substring(0, firstCharIndex).trim();
+                            String jsonPart = rawResponse.substring(firstCharIndex).trim();
+
+                            try {
+                                // Intentar parsear como JSON (Soporta {} y [])
+                                jsonParsed = objectMapper.readTree(jsonPart);
+                            } catch (Exception jsonEx) {
+                                logger.error("Error parseando JSON para dato [{}]: {}", dato, jsonEx.getMessage());
+                                errorMessage = "Error de formato JSON: " + jsonEx.getMessage();
+                                header = rawResponse; // Si falla el parseo, guardamos todo como texto
+                            }
+                        } else {
+                            // No se encontró ninguna estructura JSON, se trata como texto plano
+                            header = rawResponse.trim();
+                        }
+                    } else {
+                        header = "";
+                        errorMessage = (rawResponse == null) ? "Respuesta nula de CICS" : "Respuesta vacía de CICS";
+                    }
+
+                } catch (Exception e) {
+                    logger.error("Error crítico procesando dato [{}]: {}", dato, e.getMessage());
+                    errorMessage = e.getMessage();
+                }
+
+                long elapsedTime = System.currentTimeMillis() - startTime;
+
+                return CicsDatosJsonResponse.builder()
+                        .datoEntrada(dato)
+                        .headerResponse(header)
+                        .jsonResponse(jsonParsed)
+                        .errorMessage(errorMessage)
+                        .elapsedTimeMs(elapsedTime)
+                        .build();
+            }, taskExecutor);
+
+            futures.add(future);
+        }
+
+        // 2. Esperar a que todas las tareas terminen
+        CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+
+        // 3. Unir resultados
+        return allOf.thenApply(v -> futures.stream()
+                .map(CompletableFuture::join)
+                .collect(Collectors.toList())
+        ).get();
+
+    } catch (Exception e) {
+        logger.error("Error crítico en el orquestador concurrente JSON: {}", e.getMessage(), e);
+        throw e;
+    }
+}
 
 }

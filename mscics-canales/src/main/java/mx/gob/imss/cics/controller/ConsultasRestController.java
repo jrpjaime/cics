@@ -19,8 +19,10 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import mx.gob.imss.cics.dto.CicsConcurrentRequest;
+import mx.gob.imss.cics.dto.CicsDatosJsonResponse;
 import mx.gob.imss.cics.dto.CicsDatosResponse;
 import mx.gob.imss.cics.dto.CicsRequest;
+import mx.gob.imss.cics.dto.CicsTotalConcurrentJsonResponse;
 import mx.gob.imss.cics.dto.CicsTotalConcurrentResponse;
 import mx.gob.imss.cics.service.CicsConsultasService;
  
@@ -276,5 +278,55 @@ public class ConsultasRestController {
             return String.format("%.2f MB", (double) longitudEnBytes / (1024 * 1024));
         }
     }
+
+
+
+
+@PostMapping("/consultarCicsConcurrentetiempoerroresjson")
+public ResponseEntity<CicsTotalConcurrentJsonResponse> consultarCicsConcurrentetiempoerroresjson(@RequestBody CicsConcurrentRequest request) {
+    if (request.getDatosEntradaList() == null || request.getDatosEntradaList().isEmpty()) {
+        return new ResponseEntity<>(HttpStatus.BAD_REQUEST);
+    }
+
+    long totalTiempoInicio = System.currentTimeMillis();
+    List<CicsDatosJsonResponse> responses = new ArrayList<>();
+    String errorMessage = null;
+
+    try {
+        responses = cicsConsultasService.procesarConcurrentementeJson(
+                request.getDatosEntradaList(),
+                request.getUsuario(),
+                request.getPassword(),
+                request.getPrograma(),
+                request.getTransaccion()
+        );
+    } catch (Exception e) {
+        logger.error("Error en endpoint JSON: {}", e.getMessage());
+        errorMessage = e.getMessage();
+    }
+
+    long totalElapsedTimeMs = System.currentTimeMillis() - totalTiempoInicio;
+    
+    // Cálculos de métricas
+    int totalErrors = 0;
+    long totalBytes = 0;
+    for (CicsDatosJsonResponse res : responses) {
+        if (res.getErrorMessage() != null) totalErrors++;
+        if (res.getHeaderResponse() != null) totalBytes += res.getHeaderResponse().getBytes(StandardCharsets.UTF_8).length;
+        // Nota: No sumamos el JSON aquí para métricas de red cruda, 
+        // pero podrías serializarlo si necesitas el tamaño exacto del objeto parseado.
+    }
+
+    CicsTotalConcurrentJsonResponse totalResponse = CicsTotalConcurrentJsonResponse.builder()
+            .individualResponses(responses)
+            .totalElapsedTimeMs(totalElapsedTimeMs)
+            .totalElapsedTimeFormatted(formatElapsedTime(totalElapsedTimeMs))
+            .totalResponseLengthBytes(totalBytes)
+            .totalResponseLengthFormatted(formatResponseLength(totalBytes))
+            .totalErrors(totalErrors)
+            .build();
+
+    return new ResponseEntity<>(totalResponse, errorMessage != null ? HttpStatus.INTERNAL_SERVER_ERROR : HttpStatus.OK);
+}    
 
 }
