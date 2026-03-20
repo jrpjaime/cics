@@ -122,7 +122,6 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
         //  EL BLOQUE FINALLY CON SHUTDOWN: El ciclo de vida del executor ahora lo maneja Spring.
     }
 
-
 @Override
 public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
         List<String> datosEntradaList,
@@ -133,11 +132,11 @@ public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
 
     logger.info("Iniciando procesamiento concurrente JSON para {} registros.", datosEntradaList.size());
 
-    // 1. Determinar parámetros efectivos
+    // 1. Determinar parámetros efectivos (Usa los del YML si vienen null)
     final String effUser = (usuario != null && !usuario.isEmpty()) ? usuario : defaultUser;
     final String effPass = (password != null && !password.isEmpty()) ? password : defaultPassword;
     final String effProg = (programa != null && !programa.isEmpty()) ? programa : defaultPrograma;
-    final String effTrans = (transaccion != null && !transaccion.isEmpty()) ? transaccion : defaultTransaccion;
+     final String effTrans = (transaccion != null && !transaccion.isEmpty()) ? transaccion : defaultTransaccion;
 
     try {
         List<CompletableFuture<CicsDatosJsonResponse>> futures = new ArrayList<>();
@@ -155,12 +154,12 @@ public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
                     rawResponse = cicsService.enviaReciveCadena(dato, effUser, effPass, effProg, effTrans);
 
                     if (rawResponse != null && !rawResponse.trim().isEmpty()) {
-                        // Mejora de seguridad: Detectar el inicio de un objeto { o un arreglo [
+                        // A. Encontrar dónde empieza el JSON realmente
                         int jsonStartIndex = rawResponse.indexOf("{");
                         int arrayStartIndex = rawResponse.indexOf("[");
 
                         int firstCharIndex = -1;
-                        // Lógica para encontrar cuál de los dos símbolos aparece primero
+																							
                         if (jsonStartIndex >= 0 && arrayStartIndex >= 0) {
                             firstCharIndex = Math.min(jsonStartIndex, arrayStartIndex);
                         } else if (jsonStartIndex >= 0) {
@@ -170,21 +169,35 @@ public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
                         }
 
                         if (firstCharIndex >= 0) {
-                            // Separar el encabezado de texto de la estructura JSON
+                            // Separar el encabezado de texto (Ej: "WM-RET-JSON (")
                             header = rawResponse.substring(0, firstCharIndex).trim();
                             String jsonPart = rawResponse.substring(firstCharIndex).trim();
 
+                            // B. LIMPIEZA DEL SUFIJO: Encontrar dónde termina el JSON realmente
+                            // Buscamos la última llave de cierre o corchete de cierre
+                            int lastJsonIndex = jsonPart.lastIndexOf("}");
+                            int lastArrayIndex = jsonPart.lastIndexOf("]");
+                            int finalCharIndex = Math.max(lastJsonIndex, lastArrayIndex);
+
+                            if (finalCharIndex >= 0) {
+                                // Cortamos la cadena para eliminar el ")" y espacios sobrantes
+                                jsonPart = jsonPart.substring(0, finalCharIndex + 1);
+                            }
+
                             try {
-                                // Intentar parsear como JSON (Soporta {} y [])
+                                // Intentar parsear la cadena limpia
                                 jsonParsed = objectMapper.readTree(jsonPart);
                             } catch (Exception jsonEx) {
-                                logger.error("Error parseando JSON para dato [{}]: {}", dato, jsonEx.getMessage());
+                                logger.error("Error parseando JSON para dato [{}]. Contenido intentado: >>>{}<<<", dato, jsonPart);
+                                logger.error("Detalle error Jackson: {}", jsonEx.getMessage());
                                 errorMessage = "Error de formato JSON: " + jsonEx.getMessage();
-                                header = rawResponse; // Si falla el parseo, guardamos todo como texto
+                                // Si falla, guardamos la respuesta cruda en el header para diagnóstico
+                                header = rawResponse; 
                             }
                         } else {
-                            // No se encontró ninguna estructura JSON, se trata como texto plano
+                            // No se encontró ninguna estructura JSON { o [
                             header = rawResponse.trim();
+                            errorMessage = "La respuesta de CICS no contiene una estructura JSON válida.";
                         }
                     } else {
                         header = "";

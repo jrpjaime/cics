@@ -1,5 +1,5 @@
 server:
-  port: 4510
+  port: 8084
 
 jwt:
   secret: TExBVkVfTVVZX1NFQ1JFVEzE3Zmxu7BSGSJx72BSBXM
@@ -31,17 +31,21 @@ ea01:
 app:
   cics:
     # Número máximo de hilos simultáneos para procesar Datos
-    thread-pool-size: 500
+    thread-pool-size: 10
 
     # Ejemplo de valores predeterminados para CICS
     default-cics-user: PEMI091
-    default-cics-password: MEX2511
-    default-cics-programa: EGHLA018
-    default-cics-transaccion: GH18
+    default-cics-password: MOR2603
+    default-cics-programa: EGHLA050
+    default-cics-transaccion: GH50
 
     # Configuración del pool CTG
     pool:
-      max-total: 500          # Número máximo de conexiones CTG en el pool
+      max-total: 10          # Número máximo de conexiones CTG en el pool
       max-idle: 10           # Número máximo de conexiones CTG inactivas
       min-idle: 5           # Número mínimo de conexiones CTG inactivas
       max-wait-millis: 5000  # Tiempo máximo de espera para obtener una conexión
+
+
+    default-rest-user: jaime
+    default-rest-password: imss1234
