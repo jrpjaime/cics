@@ -1,0 +1,82 @@
+server:
+  port: 8084
+
+jwt:
+  secret: TExBVkVfTVVZX1NFQ1JFVEzE3Zmxu7BSGSJx72BSBXM
+
+spring:
+  application:
+    name: mscics-integrationhub
+
+  # --- CONFIGURACIÓN DE BASE DE DATOS ORACLE ---
+  datasource:
+    url: jdbc:oracle:thin:@172.16.8.166:1630:BDTU2
+    username: MGDBI_USER
+    password: BUZON9
+    driver-class-name: oracle.jdbc.OracleDriver
+    # --- CONFIGURACIÓN DEL POOL DE BASE DE DATOS ---
+    hikari:
+      # Máximo de conexiones abiertas hacia Oracle por este POD
+      maximum-pool-size: 20 
+      # Mínimo de conexiones listas
+      minimum-idle: 5
+      # Tiempo máximo de espera para obtener una conexión del pool (ms)
+      connection-timeout: 30000
+      # Tiempo máximo que una conexión puede estar inactiva
+      idle-timeout: 600000
+      # Nombre del pool para monitoreo
+      pool-name: HikariPool-Oracle-Velagro
+
+  # --- CONFIGURACIÓN DE JPA / HIBERNATE ---
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate:
+        naming-strategy: org.hibernate.cfg.ImprovedNamingStrategy
+        jdbc:
+          lob:
+            non_contextual_creation: true
+    database-platform: org.hibernate.dialect.Oracle10gDialect
+
+management:
+  endpoints:
+    web:
+      base-path: /mscics-integrationhub/v1/actuator
+      exposure:
+        include: health
+  endpoint:
+    auditevents:
+      enabled: true
+
+# Configuración del servidor CTG
+ctg:
+  ipaddress: tcp://10.100.68.137
+  port: 1425
+  servername: CICSIPIC
+
+# Configuración de versión
+ea01:
+  version: 03.03
+
+app:
+  cics:
+    # Número máximo de hilos simultáneos para procesar Datos
+    thread-pool-size: 10
+
+    # Ejemplo de valores predeterminados para CICS
+    default-cics-user: GHCTG01
+    default-cics-password: STPS
+    default-cics-programa: EGHLA050
+    default-cics-transaccion: GH50
+
+    # Configuración del pool CTG
+    pool:
+      max-total: 10          # Número máximo de conexiones CTG en el pool
+      max-idle: 10           # Número máximo de conexiones CTG inactivas
+      min-idle: 5           # Número mínimo de conexiones CTG inactivas
+      max-wait-millis: 5000  # Tiempo máximo de espera para obtener una conexión
+
+
+ 

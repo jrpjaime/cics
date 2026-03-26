@@ -32,12 +32,10 @@ public class CicsGatewayObjectFactory extends BasePooledObjectFactory<JavaGatewa
         try {
             jg.setURL(ctgServer);
             jg.setPort(ctgPort);
-            jg.open();
-            logger.info("CicsGatewayObjectFactory: Conexión abierta exitosamente a {}:{}", ctgServer, ctgPort);
+            jg.open(); 
             return jg;
         } catch (IOException e) {
-            logger.error("CicsGatewayObjectFactory: Error crítico al abrir conexión a {}:{}. Error: {}", 
-                         ctgServer, ctgPort, e.getMessage());
+            logger.error( e.getMessage());
             throw e; // El pool manejará la excepción según su configuración
         }
     }
@@ -56,11 +54,10 @@ public class CicsGatewayObjectFactory extends BasePooledObjectFactory<JavaGatewa
         if (jg != null) {
             try {
                 if (jg.isOpen()) {
-                    jg.close();
-                    logger.info("CicsGatewayObjectFactory: Conexión cerrada y objeto destruido.");
+                    jg.close(); 
                 }
             } catch (IOException e) {
-                logger.error("CicsGatewayObjectFactory: Error al cerrar JavaGateway: {}", e.getMessage());
+                logger.error(  e.getMessage());
             }
         }
     }

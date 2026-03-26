@@ -85,7 +85,7 @@ public class CicsService implements Serializable {
                 invalidatePoolObject(jg);
                 jg = null;
             }
-            throw new RuntimeException("Fallo en comunicación CICS", e);
+            throw new RuntimeException("Fallo en comunicación", e);
         } finally {
             if (jg != null) {
                 try { cicsGatewayPool.returnObject(jg); } catch (Exception e) { logger.error("Error al retornar al pool"); }
@@ -196,7 +196,7 @@ public class CicsService implements Serializable {
     }
 
     private void imprimirSeparador (int codRet){
-        String responseHeader = "[CR]: " + decodificarCodigoRespuesta(codRet);
+        String responseHeader = ">>> [CICS]: " + decodificarCodigoRespuesta(codRet);
         StringBuffer separator = new StringBuffer();
 
         for (int i = responseHeader.length() ; i<200 ; i++)

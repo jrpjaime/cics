@@ -66,8 +66,7 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
             String password,
             String programa,
             String transaccion) throws InterruptedException, ExecutionException {
-
-        logger.info("Iniciando procesamiento concurrente para {} registros.", datosEntradaList.size());
+ 
 
         // 1. Determinar parámetros efectivos
         final String effUser = (usuario != null && !usuario.isEmpty()) ? usuario : defaultUser;
@@ -106,10 +105,10 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
                 futures.add(future);
             }
 
-            // 2. Esperar a que TODAS las tareas terminen usando el pool inyectado
+           
             CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
             
-            // 3. Unir resultados 
+             
             return allOf.thenApply(v -> futures.stream()
                     .map(CompletableFuture::join)
                     .collect(Collectors.toList())
@@ -119,7 +118,7 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
             logger.error("Error crítico en el orquestador concurrente: {}", e.getMessage(), e);
             throw e;
         } 
-        //  EL BLOQUE FINALLY CON SHUTDOWN: El ciclo de vida del executor ahora lo maneja Spring.
+         
     }
 
 @Override
@@ -128,9 +127,7 @@ public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
         String usuario,
         String password,
         String programa,
-        String transaccion) throws InterruptedException, ExecutionException {
-
-    logger.info("Iniciando procesamiento concurrente JSON para {} registros.", datosEntradaList.size());
+        String transaccion) throws InterruptedException, ExecutionException { 
 
     // 1. Determinar parámetros efectivos (Usa los del YML si vienen null)
     final String effUser = (usuario != null && !usuario.isEmpty()) ? usuario : defaultUser;

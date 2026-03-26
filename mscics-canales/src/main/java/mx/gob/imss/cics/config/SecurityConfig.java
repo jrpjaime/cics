@@ -30,7 +30,7 @@ public class SecurityConfig {
                 .cors(withDefaults())
                 .csrf(crf -> crf.disable())
                 .authorizeHttpRequests((authorize) -> authorize
-                               // .requestMatchers("/mscics-canales/v1/info").permitAll() 
+                                .requestMatchers("/mscics-velagro/v1/info").permitAll() 
                                // .anyRequest().authenticated()
                                 .anyRequest().permitAll()
                         )
