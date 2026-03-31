@@ -167,7 +167,7 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                         logger.error("Error o Timeout ({}s) en consulta ", requestTimeout);
                         return CicsDatosResponse.builder()
                                 .datoEntrada(dato)
-                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite ("+ requestTimeout+ ")s")
+                                .errorMessage("Timeout: El sistema no respondió en el tiempo límite ("+ requestTimeout+ ")s")
                                 .build();
                     });
 
@@ -291,7 +291,7 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                         logger.error("Error o Timeout ({}s) en consulta ", requestTimeout);
                         return CicsDatosJsonResponse.builder()
                                 .datoEntrada(dato)
-                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite ("+ requestTimeout+ ")s")
+                                .errorMessage("Timeout: El sistema no respondió en el tiempo límite ("+ requestTimeout+ ")s")
                                 .build();
                     });
 

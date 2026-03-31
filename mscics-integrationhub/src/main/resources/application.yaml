@@ -87,7 +87,7 @@ app:
   cics:
     # Tiempo máximo de espera para que el Mainframe responda (en segundos)
     # Ajustado a 30 para permitir consultas de alto volumen
-    request-timeout-seconds: ${CICS-REQUEST-TIMEOUT-SECONDS:30}
+    request-timeout-seconds: ${CICS-REQUEST-TIMEOUT-SECONDS:60}
     # Pool de hilos para procesamiento asíncrono y concurrente
     thread-pool-size: 100
     
