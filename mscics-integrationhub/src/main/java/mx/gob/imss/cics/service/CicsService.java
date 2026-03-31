@@ -120,7 +120,7 @@ public class CicsService implements Serializable {
         String fechaActual = dateFormat.format(date);
 
         logger.debug("[" + fechaActual + "]: IP-" + ctgServer + " | SERV-" + serverName + " | PROG:" + programa + "/TRANS:" + transaccion);
-        logger.debug(">>SEND:" + cadenaEnviar);
+        logger.debug(">>SEND to CICS: [" + cadenaEnviar+ "]");
 
         respuestaCICS = limpiarAsteriscos(enviarMensajeCics(cadenaEnviar, serverName, usuario, password, programa, transaccion));
 

@@ -28,8 +28,8 @@ public class CustomUserDetailsService implements UserDetailsService {
         try {
             return jdbcTemplate.queryForObject(sql, (rs, rowNum) -> {
                 return new User(
-                    rs.getString("CVE_USUARIO_API"),
-                    rs.getString("DES_PASSWORD_API"), // Debe estar en BCrypt en la DB
+                    rs.getString("CVE_USUARIO_API").trim(),
+                    rs.getString("DES_PASSWORD_API").trim(), // Debe estar en BCrypt en la DB
                     new ArrayList<>() // Aquí podrías cargar Roles si los añades a la tabla
                 );
             }, username);

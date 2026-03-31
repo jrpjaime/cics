@@ -12,10 +12,14 @@ spring:
 
   # --- CONFIGURACIÓN DE PERSISTENCIA (ORACLE 11G) ---
   datasource:
-    url: ${DB_URL:jdbc:oracle:thin:@172.16.8.166:1630:BDTU2}
-    username: ${DB_USER:MGDBI_USER}
-    password: ${DB_PASSWORD:BUZON9}
-    driver-class-name: oracle.jdbc.OracleDriver
+    #url: ${DB_URL:jdbc:oracle:thin:@172.16.8.166:1630:BDTU2}
+    #username: ${DB_USER:MGDBI_USER}
+    #password: ${DB_PASSWORD:BUZON9}
+    #driver-class-name: oracle.jdbc.OracleDriver
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/:1630:dbcics}
+    username: ${DB_USER:root}
+    password: ${DB_PASSWORD:Admin1234}
+    driver-class-name: org.mariadb.jdbc.Driver
     # Pool de conexiones Hikari (Ajustado para alta concurrencia)
     hikari:
       pool-name: HikariPool-CICS-Hub
@@ -32,7 +36,8 @@ spring:
       ddl-auto: none
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.OracleDialect
+        # dialect: org.hibernate.dialect.OracleDialect
+        dialect: org.hibernate.dialect.MariaDBDialect
         jdbc:
           # Necesario para el manejo de CLOB (Error logs) en Oracle
           lob:
