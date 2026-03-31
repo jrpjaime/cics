@@ -98,7 +98,7 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                                                    rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMsg);
             }
         }, taskExecutor)
-        .get(60, TimeUnit.SECONDS); // Timeout forzado para peticiones individuales
+        .get(10, TimeUnit.SECONDS); // Timeout forzado para peticiones individuales
     } catch (Exception e) {
         logger.error("Error o Timeout en consulta individual: {}", e.getMessage());
         throw new RuntimeException("La consulta al Mainframe excedió el tiempo límite.");
@@ -279,13 +279,13 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                             .elapsedTimeMs(elapsedTime)
                             .build();
                 }, taskExecutor)  // ---  TIMEOUT A NIVEL ORQUESTADOR ---
-                    .orTimeout(60, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
+                    .orTimeout(10, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
                     .exceptionally(ex -> {
                         // Si ocurre un timeout o cualquier error no capturado arriba
                         logger.error("Timeout o error crítico en petición para [{}]: {}", dato, ex.getMessage());
                         return CicsDatosJsonResponse.builder()
                                 .datoEntrada(dato)
-                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite (60s)")
+                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite (10s)")
                                 .build();
                     });
 
