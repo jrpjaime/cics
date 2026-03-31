@@ -52,6 +52,20 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
     @Autowired
     private ObjectMapper objectMapper;
 
+
+    /**
+     * Valida si el usuario tiene permiso explícito para el binomio Programa-Transacción
+     */
+    private void validarAcceso(UsuarioCicsMapping mapping, String programa, String transaccion, String apiUser) {
+        String llave = programa.trim() + "-" + transaccion.trim();
+        if (mapping.getPermisosAutorizados() == null || !mapping.getPermisosAutorizados().contains(llave)) {
+            logger.error("ACCESO DENEGADO: El usuario {} intentó ejecutar {}-{} sin autorización.", apiUser, programa, transaccion);
+            throw new RuntimeException("No tiene permisos para ejecutar el programa/transacción solicitado.");
+        }
+    }
+    
+    
+
     /**
      * Realiza una consulta CICS individual.
      * Identifica al usuario del JWT y aplica el mapeo de credenciales de Mainframe.
@@ -60,6 +74,8 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
 public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, String passwordReq, String programa, String transaccion) {
     String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
     UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+
+    validarAcceso(mapping, programa, transaccion, apiUser);
     
     // Usar CompletableFuture también aquí para aplicar el Timeout de 10s
     try {
@@ -100,6 +116,9 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
         // Identidad desde JWT y Mapeo
         String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
         UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+
+
+        validarAcceso(mapping, programa, transaccion, apiUser);
         
         final String mfUser = mapping.getCveUsuarioMainframe();
         final String mfPass = mapping.getDesPasswordMainframe();
@@ -171,6 +190,8 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
 
         String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
         UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+
+        validarAcceso(mapping, programa, transaccion, apiUser);
         
         final String mfUser = mapping.getCveUsuarioMainframe();
         final String mfPass = mapping.getDesPasswordMainframe();

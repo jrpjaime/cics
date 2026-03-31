@@ -53,7 +53,7 @@ info:
   app:
     name: ${spring.application.name}
     description: "CICS Integration Hub"
-    version: "01.00"        # Versión de Negocio  
+    version: "1.0.0"        # Versión de Negocio  
     api-version: "1.0.0"   # Versión técnica de la API
     status: "Production"
 management:
@@ -80,15 +80,15 @@ ctg:
 # --- PARÁMETROS DEL MICROSERVICIO ---
 app:
   cics:
-    # Pool de hilos para procesamiento asíncrono y concurrente de NSS
+    # Pool de hilos para procesamiento asíncrono y concurrente
     thread-pool-size: 100
     
     # Configuración del Pool de objetos JavaGateway (CTG)
     # IMPORTANTE: Mantener coherencia con la capacidad del servidor CICS
     pool:
       max-total: 200          # Máximo de conexiones físicas abiertas
-      max-idle: 50           # Mantener 10 conexiones calientes
-      min-idle: 20            # Mínimo de 5 conexiones siempre listas
+      max-idle: 50           # Mantener conexiones 
+      min-idle: 20            # Mínimo de conexiones siempre listas
       max-wait-millis: 3000  # Tiempo de espera antes de error por saturación
       
     # Mantenimiento preventivo del pool
