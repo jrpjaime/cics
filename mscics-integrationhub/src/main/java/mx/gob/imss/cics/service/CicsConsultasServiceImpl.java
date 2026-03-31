@@ -36,6 +36,9 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
     @Value("${app.cics.thread-pool-size}")
     private int threadPoolSize;
 
+    @Value("${app.cics.request-timeout-seconds}")  
+    private int requestTimeout;
+
     @Autowired
     private CicsService cicsService;
 
@@ -98,10 +101,11 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                                                    rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMsg);
             }
         }, taskExecutor)
-        .get(10, TimeUnit.SECONDS); // Timeout forzado para peticiones individuales
+        .get(requestTimeout, TimeUnit.SECONDS); // Timeout forzado para peticiones individuales
     } catch (Exception e) {
         logger.error("Error o Timeout en consulta individual: {}", e.getMessage());
-        throw new RuntimeException("La consulta al Mainframe excedió el tiempo límite.");
+        logger.error("Error o Timeout ({}s) en consulta ", requestTimeout);
+        throw new RuntimeException("La consulta al Mainframe excedió el tiempo límite Timeout "+ requestTimeout + "s" );
     }
 }
 
@@ -156,13 +160,14 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                             .elapsedTimeMs(elapsedTime)
                             .build();
                 }, taskExecutor)    // ---  TIMEOUT A NIVEL ORQUESTADOR ---
-                    .orTimeout(10, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
+                    .orTimeout(requestTimeout, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
                     .exceptionally(ex -> {
                         // Si ocurre un timeout o cualquier error no capturado arriba
                         logger.error("Timeout o error crítico en petición para [{}]: {}", dato, ex.getMessage());
+                        logger.error("Error o Timeout ({}s) en consulta ", requestTimeout);
                         return CicsDatosResponse.builder()
                                 .datoEntrada(dato)
-                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite (10s)")
+                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite ("+ requestTimeout+ ")s")
                                 .build();
                     });
 
@@ -279,13 +284,14 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                             .elapsedTimeMs(elapsedTime)
                             .build();
                 }, taskExecutor)  // ---  TIMEOUT A NIVEL ORQUESTADOR ---
-                    .orTimeout(10, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
+                    .orTimeout(requestTimeout, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
                     .exceptionally(ex -> {
                         // Si ocurre un timeout o cualquier error no capturado arriba
                         logger.error("Timeout o error crítico en petición para [{}]: {}", dato, ex.getMessage());
+                        logger.error("Error o Timeout ({}s) en consulta ", requestTimeout);
                         return CicsDatosJsonResponse.builder()
                                 .datoEntrada(dato)
-                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite (10s)")
+                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite ("+ requestTimeout+ ")s")
                                 .build();
                     });
 
