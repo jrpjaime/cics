@@ -5,95 +5,127 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.stream.Collectors;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger; 
+import org.apache.logging.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import mx.gob.imss.cics.dto.CicsDatosJsonResponse;
 import mx.gob.imss.cics.dto.CicsDatosResponse;
+import mx.gob.imss.cics.dto.UsuarioCicsMapping;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Qualifier;
-import org.springframework.beans.factory.annotation.Value; 
-
+/**
+ * Servicio de Orquestación de Consultas CICS.
+ * Implementa seguridad por Token JWT, Mapeo de Identidades con Caché 
+ * y Auditoría Transaccional según estándar IMSS CIT-DAT.
+ */
 @Service("cicsConsultasService")
 public class CicsConsultasServiceImpl implements CicsConsultasService {
 
-	private static final Logger logger = LogManager.getLogger(CicsConsultasServiceImpl.class);
+    private static final Logger logger = LogManager.getLogger(CicsConsultasServiceImpl.class);
 
-	@Value("${app.cics.thread-pool-size}")
+    @Value("${app.cics.thread-pool-size}")
     private int threadPoolSize;
 
+    @Autowired
+    private CicsService cicsService;
 
-	@Value("${app.cics.default-cics-user}")
-    private String defaultUser;
-    @Value("${app.cics.default-cics-password}")
-    private String defaultPassword;
-    @Value("${app.cics.default-cics-programa}")
-    private String defaultPrograma;
-    @Value("${app.cics.default-cics-transaccion}")
-    private String defaultTransaccion;
+    @Autowired
+    private UsuarioMappingService usuarioMappingService;
 
-
-	@Autowired
-	private CicsService cicsService;  
+    @Autowired
+    private AuditoriaService auditoriaService;
 
     @Autowired
     @Qualifier("cicsTaskExecutor")
     private Executor taskExecutor;
 
     @Autowired
-    private ObjectMapper objectMapper; 
+    private ObjectMapper objectMapper;
 
-
+    /**
+     * Realiza una consulta CICS individual.
+     * Identifica al usuario del JWT y aplica el mapeo de credenciales de Mainframe.
+     */
     @Override
-    public String realizarConsultaCics(String cadenaEnviar, String usuario, String password, String programa, String transaccion) {
-        logger.info("Realizando consulta CICS con programa: {} y transacción: {}", programa, transaccion);
-        return cicsService.enviaReciveCadena(cadenaEnviar, usuario, password, programa, transaccion);
+    public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, String passwordReq, String programa, String transaccion) {
+        // 1. Obtener usuario del contexto de seguridad (JWT)
+        String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
+        
+        // 2. Recuperar credenciales de Mainframe (Desde Caché/DB)
+        UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+        
+        logger.info("Realizando consulta CICS individual para usuario: {} con programa: {}", apiUser, programa);
+        
+        long startTime = System.currentTimeMillis();
+        String respuesta = null;
+        String errorMsg = null;
+        int rc = 0;
+
+        try {
+            respuesta = cicsService.enviaReciveCadena(cadenaEnviar, mapping.getCveUsuarioMainframe(), 
+                                                     mapping.getDesPasswordMainframe(), programa, transaccion);
+        } catch (Exception e) {
+            errorMsg = e.getMessage();
+            rc = -1;
+            throw e;
+        } finally {
+            long elapsedTime = System.currentTimeMillis() - startTime;
+            // Auditoría Asíncrona
+            auditoriaService.registrarBitacora(apiUser, programa, transaccion, cadenaEnviar, 
+                                               rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMsg);
+        }
+        return respuesta;
     }
 
+    /**
+     * Procesamiento concurrente de datos (NSS) con Auditoría individual por registro.
+     */
     @Override
     public List<CicsDatosResponse> procesarConcurrentemente(
-            List<String> datosEntradaList,
-            String usuario,
-            String password,
-            String programa,
-            String transaccion) throws InterruptedException, ExecutionException {
+            List<String> datosEntradaList, String usuario, String password, 
+            String programa, String transaccion) throws InterruptedException, ExecutionException {
 
-        logger.info("Iniciando procesamiento concurrente para {} registros.", datosEntradaList.size());
+        // Identidad desde JWT y Mapeo
+        String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
+        UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+        
+        final String mfUser = mapping.getCveUsuarioMainframe();
+        final String mfPass = mapping.getDesPasswordMainframe();
 
-        // 1. Determinar parámetros efectivos
-        final String effUser = (usuario != null && !usuario.isEmpty()) ? usuario : defaultUser;
-        final String effPass = (password != null && !password.isEmpty()) ? password : defaultPassword;
-        final String effProg = (programa != null && !programa.isEmpty()) ? programa : defaultPrograma;
-        final String effTrans = (transaccion != null && !transaccion.isEmpty()) ? transaccion : defaultTransaccion;
+        logger.info("Iniciando procesamiento concurrente para {} registros. Usuario API: {}", datosEntradaList.size(), apiUser);
 
         try {
             List<CompletableFuture<CicsDatosResponse>> futures = new ArrayList<>();
 
             for (String dato : datosEntradaList) {
-                // USAMOS EL taskExecutor INYECTADO (Pool global reutilizable)
                 CompletableFuture<CicsDatosResponse> future = CompletableFuture.supplyAsync(() -> {
                     long startTime = System.currentTimeMillis();
                     String cicsResponse = null;
                     String errorMessage = null;
+                    int rc = 0;
 
                     try {
-                        // Llamada al servicio CICS
-                        cicsResponse = cicsService.enviaReciveCadena(dato, effUser, effPass, effProg, effTrans);
+                        cicsResponse = cicsService.enviaReciveCadena(dato, mfUser, mfPass, programa, transaccion);
                     } catch (Exception e) {
                         logger.error("Error procesando dato [{}]: {}", dato, e.getMessage());
                         errorMessage = e.getMessage();
+                        rc = -1;
                     }
 
                     long elapsedTime = System.currentTimeMillis() - startTime;
+
+                    // Registro en Bitácora Institucional (Asíncrono)
+                    auditoriaService.registrarBitacora(apiUser, programa, transaccion, dato, 
+                                                       rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMessage);
 
                     return CicsDatosResponse.builder()
                             .datoEntrada(dato)
@@ -101,141 +133,130 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
                             .errorMessage(errorMessage)
                             .elapsedTimeMs(elapsedTime)
                             .build();
-                }, taskExecutor); // <--- Referencia al pool inyectado
+                }, taskExecutor);
 
                 futures.add(future);
             }
 
-            // 2. Esperar a que TODAS las tareas terminen usando el pool inyectado
-            CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-            
-            // 3. Unir resultados 
-            return allOf.thenApply(v -> futures.stream()
-                    .map(CompletableFuture::join)
-                    .collect(Collectors.toList())
-            ).get(); 
+            return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                    .thenApply(v -> futures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
+                    .get();
 
         } catch (Exception e) {
             logger.error("Error crítico en el orquestador concurrente: {}", e.getMessage(), e);
             throw e;
-        } 
-        //  EL BLOQUE FINALLY CON SHUTDOWN: El ciclo de vida del executor ahora lo maneja Spring.
+        }
     }
 
-@Override
-public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
-        List<String> datosEntradaList,
-        String usuario,
-        String password,
-        String programa,
-        String transaccion) throws InterruptedException, ExecutionException {
+    /**
+     * Procesamiento concurrente con limpieza y parseo de JSON.
+     * Mantiene la lógica original de extracción de estructuras { } [ ].
+     */
+    @Override
+    public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
+            List<String> datosEntradaList, String usuario, String password, 
+            String programa, String transaccion) throws InterruptedException, ExecutionException {
 
-    logger.info("Iniciando procesamiento concurrente JSON para {} registros.", datosEntradaList.size());
+        String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
+        UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+        
+        final String mfUser = mapping.getCveUsuarioMainframe();
+        final String mfPass = mapping.getDesPasswordMainframe();
 
-    // 1. Determinar parámetros efectivos (Usa los del YML si vienen null)
-    final String effUser = (usuario != null && !usuario.isEmpty()) ? usuario : defaultUser;
-    final String effPass = (password != null && !password.isEmpty()) ? password : defaultPassword;
-    final String effProg = (programa != null && !programa.isEmpty()) ? programa : defaultPrograma;
-     final String effTrans = (transaccion != null && !transaccion.isEmpty()) ? transaccion : defaultTransaccion;
+        logger.info("Iniciando procesamiento concurrente JSON para {} registros. Usuario API: {}", datosEntradaList.size(), apiUser);
 
-    try {
-        List<CompletableFuture<CicsDatosJsonResponse>> futures = new ArrayList<>();
+        try {
+            List<CompletableFuture<CicsDatosJsonResponse>> futures = new ArrayList<>();
 
-        for (String dato : datosEntradaList) {
-            CompletableFuture<CicsDatosJsonResponse> future = CompletableFuture.supplyAsync(() -> {
-                long startTime = System.currentTimeMillis();
-                String rawResponse = null;
-                String header = null;
-                Object jsonParsed = null;
-                String errorMessage = null;
+            for (String dato : datosEntradaList) {
+                CompletableFuture<CicsDatosJsonResponse> future = CompletableFuture.supplyAsync(() -> {
+                    long startTime = System.currentTimeMillis();
+                    String rawResponse = null;
+                    String header = null;
+                    Object jsonParsed = null;
+                    String errorMessage = null;
+                    int rc = 0;
 
-                try {
-                    // Llamada al servicio CICS
-                    rawResponse = cicsService.enviaReciveCadena(dato, effUser, effPass, effProg, effTrans);
+                    try {
+                        rawResponse = cicsService.enviaReciveCadena(dato, mfUser, mfPass, programa, transaccion);
 
-                    if (rawResponse != null && !rawResponse.trim().isEmpty()) {
-                        // A. Encontrar dónde empieza el JSON realmente
-                        int jsonStartIndex = rawResponse.indexOf("{");
-                        int arrayStartIndex = rawResponse.indexOf("[");
+                        if (rawResponse != null && !rawResponse.trim().isEmpty()) {
+                            // LÓGICA ORIGINAL DE LOCALIZACIÓN DE JSON
+                            int jsonStartIndex = rawResponse.indexOf("{");
+                            int arrayStartIndex = rawResponse.indexOf("[");
+                            int firstCharIndex = -1;
 
-                        int firstCharIndex = -1;
-																							
-                        if (jsonStartIndex >= 0 && arrayStartIndex >= 0) {
-                            firstCharIndex = Math.min(jsonStartIndex, arrayStartIndex);
-                        } else if (jsonStartIndex >= 0) {
-                            firstCharIndex = jsonStartIndex;
-                        } else if (arrayStartIndex >= 0) {
-                            firstCharIndex = arrayStartIndex;
-                        }
-
-                        if (firstCharIndex >= 0) {
-                            // Separar el encabezado de texto (Ej: "WM-RET-JSON (")
-                            header = rawResponse.substring(0, firstCharIndex).trim();
-                            String jsonPart = rawResponse.substring(firstCharIndex).trim();
-
-                            // B. LIMPIEZA DEL SUFIJO: Encontrar dónde termina el JSON realmente
-                            // Buscamos la última llave de cierre o corchete de cierre
-                            int lastJsonIndex = jsonPart.lastIndexOf("}");
-                            int lastArrayIndex = jsonPart.lastIndexOf("]");
-                            int finalCharIndex = Math.max(lastJsonIndex, lastArrayIndex);
-
-                            if (finalCharIndex >= 0) {
-                                // Cortamos la cadena para eliminar el ")" y espacios sobrantes
-                                jsonPart = jsonPart.substring(0, finalCharIndex + 1);
+                            if (jsonStartIndex >= 0 && arrayStartIndex >= 0) {
+                                firstCharIndex = Math.min(jsonStartIndex, arrayStartIndex);
+                            } else if (jsonStartIndex >= 0) {
+                                firstCharIndex = jsonStartIndex;
+                            } else if (arrayStartIndex >= 0) {
+                                firstCharIndex = arrayStartIndex;
                             }
 
-                            try {
-                                // Intentar parsear la cadena limpia
-                                jsonParsed = objectMapper.readTree(jsonPart);
-                            } catch (Exception jsonEx) {
-                                logger.error("Error parseando JSON para dato [{}]. Contenido intentado: >>>{}<<<", dato, jsonPart);
-                                logger.error("Detalle error Jackson: {}", jsonEx.getMessage());
-                                errorMessage = "Error de formato JSON: " + jsonEx.getMessage();
-                                // Si falla, guardamos la respuesta cruda en el header para diagnóstico
-                                header = rawResponse; 
+                            if (firstCharIndex >= 0) {
+                                header = rawResponse.substring(0, firstCharIndex).trim();
+                                String jsonPart = rawResponse.substring(firstCharIndex).trim();
+
+                                // LÓGICA ORIGINAL DE LIMPIEZA DE SUFIJO
+                                int lastJsonIndex = jsonPart.lastIndexOf("}");
+                                int lastArrayIndex = jsonPart.lastIndexOf("]");
+                                int finalCharIndex = Math.max(lastJsonIndex, lastArrayIndex);
+
+                                if (finalCharIndex >= 0) {
+                                    jsonPart = jsonPart.substring(0, finalCharIndex + 1);
+                                }
+
+                                try {
+                                    jsonParsed = objectMapper.readTree(jsonPart);
+                                } catch (Exception jsonEx) {
+                                    logger.error("Error parseando JSON para dato [{}]: {}", dato, jsonEx.getMessage());
+                                    errorMessage = "Error de formato JSON: " + jsonEx.getMessage();
+                                    header = rawResponse; 
+                                    rc = -2; // Código interno para error de parseo
+                                }
+                            } else {
+                                header = rawResponse.trim();
+                                errorMessage = "La respuesta de CICS no contiene una estructura JSON válida.";
+                                rc = -3;
                             }
                         } else {
-                            // No se encontró ninguna estructura JSON { o [
-                            header = rawResponse.trim();
-                            errorMessage = "La respuesta de CICS no contiene una estructura JSON válida.";
+                            header = "";
+                            errorMessage = (rawResponse == null) ? "Respuesta nula de CICS" : "Respuesta vacía de CICS";
+                            rc = -4;
                         }
-                    } else {
-                        header = "";
-                        errorMessage = (rawResponse == null) ? "Respuesta nula de CICS" : "Respuesta vacía de CICS";
+
+                    } catch (Exception e) {
+                        logger.error("Error crítico procesando dato [{}]: {}", dato, e.getMessage());
+                        errorMessage = e.getMessage();
+                        rc = -1;
                     }
 
-                } catch (Exception e) {
-                    logger.error("Error crítico procesando dato [{}]: {}", dato, e.getMessage());
-                    errorMessage = e.getMessage();
-                }
+                    long elapsedTime = System.currentTimeMillis() - startTime;
 
-                long elapsedTime = System.currentTimeMillis() - startTime;
+                    // Registro en Bitácora Institucional
+                    auditoriaService.registrarBitacora(apiUser, programa, transaccion, dato, 
+                                                       rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMessage);
 
-                return CicsDatosJsonResponse.builder()
-                        .datoEntrada(dato)
-                        .headerResponse(header)
-                        .jsonResponse(jsonParsed)
-                        .errorMessage(errorMessage)
-                        .elapsedTimeMs(elapsedTime)
-                        .build();
-            }, taskExecutor);
+                    return CicsDatosJsonResponse.builder()
+                            .datoEntrada(dato)
+                            .headerResponse(header)
+                            .jsonResponse(jsonParsed)
+                            .errorMessage(errorMessage)
+                            .elapsedTimeMs(elapsedTime)
+                            .build();
+                }, taskExecutor);
 
-            futures.add(future);
+                futures.add(future);
+            }
+
+            return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                    .thenApply(v -> futures.stream().map(CompletableFuture::join).collect(Collectors.toList()))
+                    .get();
+
+        } catch (Exception e) {
+            logger.error("Error crítico en el orquestador concurrente JSON: {}", e.getMessage(), e);
+            throw e;
         }
-
-        // 2. Esperar a que todas las tareas terminen
-        CompletableFuture<Void> allOf = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
-
-        // 3. Unir resultados
-        return allOf.thenApply(v -> futures.stream()
-                .map(CompletableFuture::join)
-                .collect(Collectors.toList())
-        ).get();
-
-    } catch (Exception e) {
-        logger.error("Error crítico en el orquestador concurrente JSON: {}", e.getMessage(), e);
-        throw e;
     }
-}
-
 }
