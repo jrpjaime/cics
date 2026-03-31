@@ -20,7 +20,7 @@ spring:
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:Admin1234}
     driver-class-name: org.mariadb.jdbc.Driver
-    # Pool de conexiones Hikari (Ajustado para alta concurrencia)
+    # Pool de conexiones Hikari (Ajustado para alta concurrencia) 
     hikari:
       pool-name: HikariPool-CICS-Hub
       maximum-pool-size: 60
