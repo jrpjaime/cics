@@ -20,12 +20,19 @@ public class AuditoriaService {
     @Async("cicsTaskExecutor")
     public void registrarBitacora(String apiUser, String programa, String trans, 
                                   String entrada, int rc, long ms, String estado, String error) {
-        
+        /*
         String sql = "INSERT INTO MSCT_AUDITORIA_CICS (" +
                      "ID_AUDITORIA_CICS, CVE_USUARIO_API, NOM_PROGRAMA, NOM_TRANSACCION, " +
                      "REF_DATO_ENTRADA, NUM_CODIGO_RETORNO, NUM_TIEMPO_PROCESO, " +
                      "DES_ESTADO_TRANS, REF_ERROR_LOG, STP_CREACION) " +
                      "VALUES (MSCS_AUDITORIA_CICS.NEXTVAL, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
+                     */
+
+                     String sql = "INSERT INTO MSCT_AUDITORIA_CICS (" +
+             "ID_AUDITORIA_CICS, CVE_USUARIO_API, NOM_PROGRAMA, NOM_TRANSACCION, " +
+             "REF_DATO_ENTRADA, NUM_CODIGO_RETORNO, NUM_TIEMPO_PROCESO, " +
+             "DES_ESTADO_TRANS, REF_ERROR_LOG, STP_CREACION) " +
+             "VALUES (NEXTVAL(MSCS_AUDITORIA_CICS), ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)";
         
         try {
             jdbcTemplate.update(sql, apiUser, programa, trans, entrada, rc, ms, estado, error);
