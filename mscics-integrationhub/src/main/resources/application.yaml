@@ -16,7 +16,7 @@ spring:
     #username: ${DB_USER:MGDBI_USER}
     #password: ${DB_PASSWORD:BUZON9}
     #driver-class-name: oracle.jdbc.OracleDriver
-    url: ${DB_URL:jdbc:mariadb://localhost:3306/:1630:dbcics}
+    url: ${DB_URL:jdbc:mariadb://localhost:3306/dbcics}
     username: ${DB_USER:root}
     password: ${DB_PASSWORD:admin1234}
     driver-class-name: org.mariadb.jdbc.Driver
