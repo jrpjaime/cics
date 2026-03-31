@@ -46,7 +46,7 @@ public class CicsGatewayPoolConfig {
         config.setMinEvictableIdleTime(Duration.ofMinutes(5));
         config.setTestOnReturn(true); // Validar la conexión antes de regresarla al pool
         config.setBlockWhenExhausted(true); 
-
+        config.setJmxEnabled(false);
         GenericObjectPool<JavaGateway> pool = new GenericObjectPool<>(cicsGatewayObjectFactory, config);
         return pool;
     }
