@@ -18,7 +18,7 @@ spring:
     #driver-class-name: oracle.jdbc.OracleDriver
     url: ${DB_URL:jdbc:mariadb://localhost:3306/:1630:dbcics}
     username: ${DB_USER:root}
-    password: ${DB_PASSWORD:Admin1234}
+    password: ${DB_PASSWORD:admin1234}
     driver-class-name: org.mariadb.jdbc.Driver
     # Pool de conexiones Hikari (Ajustado para alta concurrencia) 
     hikari:
