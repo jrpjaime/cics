@@ -76,7 +76,7 @@ management:
 
 # --- CONFIGURACIÓN IBM CICS TRANSACTION GATEWAY (CTG) ---
 ctg:
-  ipaddress: tcp://10.100.68.137
+  ipaddress: tcp://10.100.68.200
   port: 1425
   servername: CICSIPIC
 
@@ -98,8 +98,8 @@ app:
       
     # Mantenimiento preventivo del pool
     eviction:
-      time-between-runs-seconds: 30
-      min-evictable-idle-minutes: 5
+      time-between-runs-seconds: 10
+      min-evictable-idle-minutes: 1 # Si una conexión está ociosa 1 min, liberarla
 
 # --- LOGGING ---
 logging:
