@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
@@ -55,36 +56,38 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
      * Realiza una consulta CICS individual.
      * Identifica al usuario del JWT y aplica el mapeo de credenciales de Mainframe.
      */
-    @Override
-    public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, String passwordReq, String programa, String transaccion) {
-        // 1. Obtener usuario del contexto de seguridad (JWT)
-        String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
-        
-        // 2. Recuperar credenciales de Mainframe (Desde Caché/DB)
-        UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
-        
-        logger.info("Realizando consulta CICS individual para usuario: {} con programa: {}", apiUser, programa);
-        
-        long startTime = System.currentTimeMillis();
-        String respuesta = null;
-        String errorMsg = null;
-        int rc = 0;
-
-        try {
-            respuesta = cicsService.enviaReciveCadena(cadenaEnviar, mapping.getCveUsuarioMainframe(), 
-                                                     mapping.getDesPasswordMainframe(), programa, transaccion);
-        } catch (Exception e) {
-            errorMsg = e.getMessage();
-            rc = -1;
-            throw e;
-        } finally {
-            long elapsedTime = System.currentTimeMillis() - startTime;
-            // Auditoría Asíncrona
-            auditoriaService.registrarBitacora(apiUser, programa, transaccion, cadenaEnviar, 
-                                               rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMsg);
-        }
-        return respuesta;
+ @Override
+public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, String passwordReq, String programa, String transaccion) {
+    String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
+    UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+    
+    // Usar CompletableFuture también aquí para aplicar el Timeout de 10s
+    try {
+        return CompletableFuture.supplyAsync(() -> {
+            long startTime = System.currentTimeMillis();
+            String respuesta = null;
+            String errorMsg = null;
+            int rc = 0;
+            try {
+                respuesta = cicsService.enviaReciveCadena(cadenaEnviar, mapping.getCveUsuarioMainframe(), 
+                                                         mapping.getDesPasswordMainframe(), programa, transaccion);
+                return respuesta;
+            } catch (Exception e) {
+                errorMsg = e.getMessage();
+                rc = -1;
+                throw new RuntimeException(e);
+            } finally {
+                long elapsedTime = System.currentTimeMillis() - startTime;
+                auditoriaService.registrarBitacora(apiUser, programa, transaccion, cadenaEnviar, 
+                                                   rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMsg);
+            }
+        }, taskExecutor)
+        .get(10, TimeUnit.SECONDS); // Timeout forzado para peticiones individuales
+    } catch (Exception e) {
+        logger.error("Error o Timeout en consulta individual: {}", e.getMessage());
+        throw new RuntimeException("La consulta al Mainframe excedió el tiempo límite.");
     }
+}
 
     /**
      * Procesamiento concurrente de datos (NSS) con Auditoría individual por registro.
@@ -133,7 +136,16 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
                             .errorMessage(errorMessage)
                             .elapsedTimeMs(elapsedTime)
                             .build();
-                }, taskExecutor);
+                }, taskExecutor)    // ---  TIMEOUT A NIVEL ORQUESTADOR ---
+                    .orTimeout(10, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
+                    .exceptionally(ex -> {
+                        // Si ocurre un timeout o cualquier error no capturado arriba
+                        logger.error("Timeout o error crítico en petición para [{}]: {}", dato, ex.getMessage());
+                        return CicsDatosResponse.builder()
+                                .datoEntrada(dato)
+                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite (10s)")
+                                .build();
+                    });
 
                 futures.add(future);
             }
@@ -245,7 +257,16 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
                             .errorMessage(errorMessage)
                             .elapsedTimeMs(elapsedTime)
                             .build();
-                }, taskExecutor);
+                }, taskExecutor)  // ---  TIMEOUT A NIVEL ORQUESTADOR ---
+                    .orTimeout(10, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
+                    .exceptionally(ex -> {
+                        // Si ocurre un timeout o cualquier error no capturado arriba
+                        logger.error("Timeout o error crítico en petición para [{}]: {}", dato, ex.getMessage());
+                        return CicsDatosJsonResponse.builder()
+                                .datoEntrada(dato)
+                                .errorMessage("Timeout: El Mainframe no respondió en el tiempo límite (10s)")
+                                .build();
+                    });
 
                 futures.add(future);
             }

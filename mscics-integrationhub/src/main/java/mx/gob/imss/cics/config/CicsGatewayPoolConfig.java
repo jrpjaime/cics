@@ -40,11 +40,12 @@ public class CicsGatewayPoolConfig {
         config.setMaxIdle(maxIdle);
         config.setMinIdle(minIdle);
         config.setMaxWait(Duration.ofMillis(maxWaitMillis));
-        config.setTestOnBorrow(true);
-        config.setTestOnReturn(false);
+        config.setTestOnBorrow(true); 
         config.setTestWhileIdle(true);
         config.setTimeBetweenEvictionRuns(Duration.ofSeconds(30));
         config.setMinEvictableIdleTime(Duration.ofMinutes(5));
+        config.setTestOnReturn(true); // Validar la conexión antes de regresarla al pool
+        config.setBlockWhenExhausted(true); 
 
         GenericObjectPool<JavaGateway> pool = new GenericObjectPool<>(cicsGatewayObjectFactory, config);
         return pool;

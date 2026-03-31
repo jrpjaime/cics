@@ -68,6 +68,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/mscics-integrationhub/v1/auth/**").permitAll() // Login abierto
                 .requestMatchers("/mscics-integrationhub/v1/info").permitAll()   // Info abierta
+                .requestMatchers("/mscics-integrationhub/v1/actuator/**").permitAll()  // PERMITIR EL ENDPOINT DE MONITOREO
                 .anyRequest().authenticated() // Bloqueo total para el resto
             )
             // Agregamos el filtro JWT antes del filtro de usuario/password estándar

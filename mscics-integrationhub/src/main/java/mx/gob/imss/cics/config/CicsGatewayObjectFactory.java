@@ -22,6 +22,17 @@ public class CicsGatewayObjectFactory extends BasePooledObjectFactory<JavaGatewa
     @Value("${ctg.port}")
     private int ctgPort;
 
+
+    @Override
+    public void activateObject(PooledObject<JavaGateway> p) throws Exception {
+        JavaGateway jg = p.getObject();
+        // Si por alguna razón la conexión física se perdió, intentar reabrirla antes de entregarla al servicio
+        if (!jg.isOpen()) {
+            logger.warn("CicsGatewayObjectFactory: Detectada conexión cerrada en el pool, reabriendo...");
+            jg.open();
+        }
+    }
+
     /**
      * Crea una nueva instancia de JavaGateway y abre la conexión físicamente.
      * La lógica de apertura ahora reside aquí, eliminando la dependencia de ComunicacionCICS.

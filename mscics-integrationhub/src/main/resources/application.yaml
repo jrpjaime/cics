@@ -1,82 +1,104 @@
 server:
   port: 8084
-
-jwt:
-  secret: TExBVkVfTVVZX1NFQ1JFVEzE3Zmxu7BSGSJx72BSBXM
+  # Configuración de servlet para asegurar codificación correcta en las respuestas
+  servlet:
+    encoding:
+      charset: UTF-8
+      force: true
 
 spring:
   application:
     name: mscics-integrationhub
 
-  # --- CONFIGURACIÓN DE BASE DE DATOS ORACLE ---
+  # --- CONFIGURACIÓN DE PERSISTENCIA (ORACLE 11G) ---
   datasource:
-    url: jdbc:oracle:thin:@172.16.8.166:1630:BDTU2
-    username: MGDBI_USER
-    password: BUZON9
+    url: ${DB_URL:jdbc:oracle:thin:@172.16.8.166:1630:BDTU2}
+    username: ${DB_USER:MGDBI_USER}
+    password: ${DB_PASSWORD:BUZON9}
     driver-class-name: oracle.jdbc.OracleDriver
-    # --- CONFIGURACIÓN DEL POOL DE BASE DE DATOS ---
+    # Pool de conexiones Hikari (Ajustado para alta concurrencia)
     hikari:
-      # Máximo de conexiones abiertas hacia Oracle por este POD
-      maximum-pool-size: 20 
-      # Mínimo de conexiones listas
-      minimum-idle: 5
-      # Tiempo máximo de espera para obtener una conexión del pool (ms)
+      pool-name: HikariPool-CICS-Hub
+      maximum-pool-size: 60
+      minimum-idle: 10
       connection-timeout: 30000
-      # Tiempo máximo que una conexión puede estar inactiva
       idle-timeout: 600000
-      # Nombre del pool para monitoreo
-      pool-name: HikariPool-Oracle-Velagro
+      max-lifetime: 1800000
 
-  # --- CONFIGURACIÓN DE JPA / HIBERNATE ---
+  # --- CONFIGURACIÓN DE HIBERNATE / JPA ---
   jpa:
     show-sql: false
     hibernate:
       ddl-auto: none
     properties:
       hibernate:
-        naming-strategy: org.hibernate.cfg.ImprovedNamingStrategy
+        dialect: org.hibernate.dialect.OracleDialect
         jdbc:
+          # Necesario para el manejo de CLOB (Error logs) en Oracle
           lob:
             non_contextual_creation: true
-    database-platform: org.hibernate.dialect.Oracle10gDialect
+        # Estrategia de nombrado para Spring Boot 3 / Hibernate 6
+        naming:
+          physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
 
+# --- SEGURIDAD PERIMETRAL (JWT) ---
+jwt:
+  # Clave secreta (Base64). Se recomienda rotar cada 90 días.
+  secret: ${JWT_SECRET:TExBVkVfTVVZX1NFQ1JFVEzE3Zmxu7BSGSJx72BSBXM}
+  # Tiempo de vida del token (10 horas)
+  expiration: 36000000
+
+# --- MONITOREO Y SALUD (ACTUATOR) ---
+info:
+  app:
+    name: ${spring.application.name}
+    description: "CICS Integration Hub"
+    version: "01.00"        # Versión de Negocio  
+    api-version: "1.0.0"   # Versión técnica de la API
+    status: "Production"
 management:
+  info:
+    env:
+      enabled: true # IMPORTANTE: En Spring Boot 3 debe habilitarse explícitamente
   endpoints:
     web:
       base-path: /mscics-integrationhub/v1/actuator
       exposure:
-        include: health
+        include: health, info, metrics
   endpoint:
-    auditevents:
-      enabled: true
+    health:
+      show-details: always
 
-# Configuración del servidor CTG
+# --- CONFIGURACIÓN IBM CICS TRANSACTION GATEWAY (CTG) ---
 ctg:
   ipaddress: tcp://10.100.68.137
   port: 1425
   servername: CICSIPIC
 
-# Configuración de versión
-ea01:
-  version: 03.03
+ 
 
+# --- PARÁMETROS DEL MICROSERVICIO ---
 app:
   cics:
-    # Número máximo de hilos simultáneos para procesar Datos
-    thread-pool-size: 10
-
-    # Ejemplo de valores predeterminados para CICS
-    default-cics-user: GHCTG01
-    default-cics-password: STPS
-    default-cics-programa: EGHLA050
-    default-cics-transaccion: GH50
-
-    # Configuración del pool CTG
+    # Pool de hilos para procesamiento asíncrono y concurrente de NSS
+    thread-pool-size: 100
+    
+    # Configuración del Pool de objetos JavaGateway (CTG)
+    # IMPORTANTE: Mantener coherencia con la capacidad del servidor CICS
     pool:
-      max-total: 10          # Número máximo de conexiones CTG en el pool
-      max-idle: 10           # Número máximo de conexiones CTG inactivas
-      min-idle: 5           # Número mínimo de conexiones CTG inactivas
-      max-wait-millis: 5000  # Tiempo máximo de espera para obtener una conexión
+      max-total: 200          # Máximo de conexiones físicas abiertas
+      max-idle: 50           # Mantener 10 conexiones calientes
+      min-idle: 20            # Mínimo de 5 conexiones siempre listas
+      max-wait-millis: 3000  # Tiempo de espera antes de error por saturación
+      
+    # Mantenimiento preventivo del pool
+    eviction:
+      time-between-runs-seconds: 30
+      min-evictable-idle-minutes: 5
 
-
- 
+# --- LOGGING ---
+logging:
+  level:
+    root: INFO
+    mx.gob.imss.cics: DEBUG
+    org.springframework.security: INFO

@@ -24,8 +24,9 @@ public class CicsService implements Serializable {
 	private static final long serialVersionUID = 1L;
     private static final Logger logger = LogManager.getLogger(CicsService.class);
 
-	@Value("${ea01.version}")
-	private String version;
+
+    @Value("${info.app.version}")
+    private String version; 
 
 	@Value("${ctg.ipaddress}")
 	private String ctgServer;
@@ -55,9 +56,10 @@ public class CicsService implements Serializable {
             
             // 1. Creamos el Bean de parámetros (DTO Limpio)
             ECIRequestBean parametros = new ECIRequestBean();
+ 
             
             // 2. Creamos el Canal usando el Service (No el Bean)
-            // CORRECCIÓN: Ahora pasamos los dos parámetros requeridos
+            // pasamos los dos parámetros requeridos
             Channel requestChannel = comunicacionCICS.creaCanal(cadenaEnviada, parametros.getChannelName());
 
             // 3. Poblamos el Bean
