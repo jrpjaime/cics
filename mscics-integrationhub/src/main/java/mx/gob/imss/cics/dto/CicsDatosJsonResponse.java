@@ -12,4 +12,5 @@ public class CicsDatosJsonResponse {
     private String errorMessage;
     private long elapsedTimeMs;
     private String uuidTransaccion; 
+    private String fechaPeticionIso; 
 }
