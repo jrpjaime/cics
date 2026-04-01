@@ -11,4 +11,5 @@ public class CicsDatosJsonResponse {
     private Object jsonResponse;   // El JSON ya convertido a objeto/mapa
     private String errorMessage;
     private long elapsedTimeMs;
+    private String uuidTransaccion; 
 }

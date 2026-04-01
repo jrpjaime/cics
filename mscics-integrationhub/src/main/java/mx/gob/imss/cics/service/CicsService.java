@@ -77,6 +77,7 @@ public class CicsService implements Serializable {
             ECIRequest req = new ECIRequest();
             comunicacionCICS.asignaParametros(req, parametros);
             comunicacionCICS.enviaSolicitud(jg, req);
+            
 
             respuestaCics = comunicacionCICS.traeRespuestaCanal(req);
             imprimirSeparador(comunicacionCICS.traeCodigoRespuesta(req));
