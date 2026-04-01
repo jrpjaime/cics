@@ -94,6 +94,9 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
     UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
 
     int txTimeout = validarAccesoYObtenerTimeout(mapping, programa, transaccion, apiUser);
+
+    // Generamos UUID para trazabilidad
+    String uuidTransaccion = java.util.UUID.randomUUID().toString();
     
     // Usar CompletableFuture también aquí para aplicar el Timeout de 10s
     try {
@@ -112,8 +115,8 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                 throw new RuntimeException(e);
             } finally {
                 long elapsedTime = System.currentTimeMillis() - startTime;
-                auditoriaService.registrarBitacora(apiUser, programa, transaccion, cadenaEnviar, 
-                                                   rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMsg);
+ 
+                auditoriaService.registrarBitacora(apiUser, programa, transaccion, cadenaEnviar,  rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMsg, uuidTransaccion);
             }
         }, taskExecutor)
         .get(txTimeout, TimeUnit.SECONDS); // Timeout forzado para peticiones individuales
@@ -148,6 +151,7 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
             List<CompletableFuture<CicsDatosResponse>> futures = new ArrayList<>();
 
             for (String dato : datosEntradaList) {
+                String uuidUnico = java.util.UUID.randomUUID().toString();
                 CompletableFuture<CicsDatosResponse> future = CompletableFuture.supplyAsync(() -> {
                     long startTime = System.currentTimeMillis();
                     String cicsResponse = null;
@@ -163,10 +167,10 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                     }
 
                     long elapsedTime = System.currentTimeMillis() - startTime;
+ 
 
                     // Registro en Bitácora Institucional (Asíncrono)
-                    auditoriaService.registrarBitacora(apiUser, programa, transaccion, dato, 
-                                                       rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMessage);
+                    auditoriaService.registrarBitacora(apiUser, programa, transaccion, dato, rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMessage, uuidUnico);
 
                     return CicsDatosResponse.builder()
                             .datoEntrada(dato)
