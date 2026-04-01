@@ -1,6 +1,6 @@
 package mx.gob.imss.cics.dto;
 
-import java.util.Set;
+import java.util.Map; 
 
 import lombok.Builder;
 import lombok.Data;
@@ -10,5 +10,5 @@ import lombok.Data;
 public class UsuarioCicsMapping {
     private String cveUsuarioMainframe;
     private String desPasswordMainframe;
-    private Set<String> permisosAutorizados;
+    private Map<String, Integer> permisosConTimeout;
 }

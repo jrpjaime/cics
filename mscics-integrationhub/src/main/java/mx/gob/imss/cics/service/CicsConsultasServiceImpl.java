@@ -36,8 +36,7 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
     @Value("${app.cics.thread-pool-size}")
     private int threadPoolSize;
 
-    @Value("${app.cics.request-timeout-seconds}")  
-    private int requestTimeout;
+  
 
     @Autowired
     private CicsService cicsService;
@@ -57,14 +56,29 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
 
 
     /**
-     * Valida si el usuario tiene permiso explícito para el binomio Programa-Transacción
+     *  validarAcceso. 
+     * 1. Si no tiene permiso -> Lanza Excepción (Seguridad)
+     * 2. Si tiene permiso -> Devuelve el timeout de la tabla (Configuración)
      */
-    private void validarAcceso(UsuarioCicsMapping mapping, String programa, String transaccion, String apiUser) {
+    private int validarAccesoYObtenerTimeout(UsuarioCicsMapping mapping, String programa, String transaccion, String apiUser) {
+        // Creamos la llave de búsqueda
         String llave = programa.trim() + "-" + transaccion.trim();
-        if (mapping.getPermisosAutorizados() == null || !mapping.getPermisosAutorizados().contains(llave)) {
-            logger.error("ACCESO DENEGADO: El usuario {} intentó ejecutar {}-{} sin autorización.", apiUser, programa, transaccion);
-            throw new RuntimeException("No tiene permisos para ejecutar el programa/transacción solicitado.");
+        
+        // --- AQUÍ ESTÁ TU VALIDACIÓN DE ACCESO ---
+        if (mapping.getPermisosConTimeout() == null || !mapping.getPermisosConTimeout().containsKey(llave)) {
+            logger.error("BLOQUEO DE SEGURIDAD: El usuario API [{}] intentó ejecutar el programa-transacción [{}] sin tener permiso en MSCC_PERMISO_CICS.", 
+                         apiUser, llave);
+            
+            // Si llegamos aquí, es porque NO EXISTE el registro en la tabla hija
+            throw new RuntimeException("Acceso Denegado: Usted no cuenta con privilegios para ejecutar " + llave);
         }
+        
+        // Si pasó la validación de arriba, recuperamos su timeout específico
+        int timeoutEncontrado = mapping.getPermisosConTimeout().get(llave);
+        
+        logger.debug("Acceso autorizado para {} con timeout de {}s", llave, timeoutEncontrado);
+        
+        return timeoutEncontrado;
     }
     
     
@@ -78,7 +92,7 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
     String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
     UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
 
-    validarAcceso(mapping, programa, transaccion, apiUser);
+    int txTimeout = validarAccesoYObtenerTimeout(mapping, programa, transaccion, apiUser);
     
     // Usar CompletableFuture también aquí para aplicar el Timeout de 10s
     try {
@@ -101,11 +115,11 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                                                    rc, elapsedTime, (rc == 0 ? "SUCCESS" : "ERROR"), errorMsg);
             }
         }, taskExecutor)
-        .get(requestTimeout, TimeUnit.SECONDS); // Timeout forzado para peticiones individuales
+        .get(txTimeout, TimeUnit.SECONDS); // Timeout forzado para peticiones individuales
     } catch (Exception e) {
         logger.error("Error o Timeout en consulta individual: {}", e.getMessage());
-        logger.error("Error o Timeout ({}s) en consulta ", requestTimeout);
-        throw new RuntimeException("La consulta al Mainframe excedió el tiempo límite Timeout "+ requestTimeout + "s" );
+        logger.error("Error o Timeout ({}s) en consulta ", txTimeout);
+        throw new RuntimeException("La consulta al Mainframe excedió el tiempo límite Timeout "+ txTimeout + "s" );
     }
 }
 
@@ -122,7 +136,7 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
         UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
 
 
-        validarAcceso(mapping, programa, transaccion, apiUser);
+        int txTimeout = validarAccesoYObtenerTimeout(mapping, programa, transaccion, apiUser);
         
         final String mfUser = mapping.getCveUsuarioMainframe();
         final String mfPass = mapping.getDesPasswordMainframe();
@@ -160,14 +174,14 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                             .elapsedTimeMs(elapsedTime)
                             .build();
                 }, taskExecutor)    // ---  TIMEOUT A NIVEL ORQUESTADOR ---
-                    .orTimeout(requestTimeout, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
+                    .orTimeout(txTimeout, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
                     .exceptionally(ex -> {
                         // Si ocurre un timeout o cualquier error no capturado arriba
                         logger.error("Timeout o error crítico en petición para [{}]: {}", dato, ex.getMessage());
-                        logger.error("Error o Timeout ({}s) en consulta ", requestTimeout);
+                        logger.error("Error o Timeout ({}s) en consulta ", txTimeout);
                         return CicsDatosResponse.builder()
                                 .datoEntrada(dato)
-                                .errorMessage("Timeout: El sistema no respondió en el tiempo límite ("+ requestTimeout+ ")s")
+                                .errorMessage("Timeout: El sistema no respondió en el tiempo límite ("+ txTimeout+ ")s")
                                 .build();
                     });
 
@@ -196,7 +210,7 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
         String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
         UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
 
-        validarAcceso(mapping, programa, transaccion, apiUser);
+        int txTimeout = validarAccesoYObtenerTimeout(mapping, programa, transaccion, apiUser);
         
         final String mfUser = mapping.getCveUsuarioMainframe();
         final String mfPass = mapping.getDesPasswordMainframe();
@@ -284,14 +298,14 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
                             .elapsedTimeMs(elapsedTime)
                             .build();
                 }, taskExecutor)  // ---  TIMEOUT A NIVEL ORQUESTADOR ---
-                    .orTimeout(requestTimeout, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
+                    .orTimeout(txTimeout, TimeUnit.SECONDS) // Si en 10 seg no responde el CTG/Mainframe, cancela.
                     .exceptionally(ex -> {
                         // Si ocurre un timeout o cualquier error no capturado arriba
                         logger.error("Timeout o error crítico en petición para [{}]: {}", dato, ex.getMessage());
-                        logger.error("Error o Timeout ({}s) en consulta ", requestTimeout);
+                        logger.error("Error o Timeout ({}s) en consulta ", txTimeout);
                         return CicsDatosJsonResponse.builder()
                                 .datoEntrada(dato)
-                                .errorMessage("Timeout: El sistema no respondió en el tiempo límite ("+ requestTimeout+ ")s")
+                                .errorMessage("Timeout: El sistema no respondió en el tiempo límite ("+ txTimeout+ ")s")
                                 .build();
                     });
 
