@@ -1,7 +1,5 @@
 package mx.gob.imss.cics.service;
  
-  
-
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -29,12 +27,14 @@ import mx.gob.imss.cics.dto.UsuarioCicsMapping;
 /**
  * SERVICIO ORQUESTADOR DE INTEGRACIÓN CICS (HUB TRANSACCIONAL).
  * 
- * Esta clase es el núcleo del sistema y se encarga de la orquestación masiva de peticiones 
- * hacia el Mainframe. Implementa patrones de resiliencia (Timeouts dinámicos), 
- * seguridad granular (ABAC), trazabilidad total (UUID e ISO Timestamps) e 
- * integridad de datos (Idempotencia).
+ * Esta clase es el núcleo de comunicación del sistema. Sus responsabilidades incluyen:
+ * 1. SEGURIDAD PERIMETRAL: Validación de privilegios por binomio Programa-Transacción (ABAC).
+ * 2. RESILIENCIA: Gestión de Timeouts dinámicos configurados desde base de datos.
+ * 3. CONCURRENCIA: Procesamiento paralelo masivo utilizando un pool de hilos optimizado.
+ * 4. TRAZABILIDAD: Generación de UUIDs e ISO Timestamps para auditoría forense.
+ * 5. LIMPIEZA DE DATOS: Extracción automática de estructuras JSON en respuestas EBCDIC.
  * 
- * Diseñado para alta disponibilidad en OpenShift atendiendo millones de peticiones diarias.
+ * @author Arquitectura de Integración Senior
  */
 @Service("cicsConsultasService")
 public class CicsConsultasServiceImpl implements CicsConsultasService {
@@ -57,200 +57,191 @@ public class CicsConsultasServiceImpl implements CicsConsultasService {
     @Autowired
     private ObjectMapper objectMapper;
 
+  
+
     /**
-     * PROCESAMIENTO CONCURRENTE CON PARSEO JSON (MÉTODO PRINCIPAL).
-     * 
-     * Orquesta la ejecución paralela de una lista de datos, validando permisos y 
-     * tiempos de respuesta específicos para cada binomio Programa-Transacción.
+     * MÉTODO 1: CONSULTA INDIVIDUAL (Síncrona con protección de Timeout).
      */
     @Override
-    public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
-            List<String> listaDeDatosEntrada, 
-            String userLegacy, 
-            String passLegacy, 
-            String nombreProgramaCics, 
-            String idTransaccionCics) throws InterruptedException, ExecutionException {
+    public String realizarConsultaCics(String cadenaEnviar, String userLegacy, String passLegacy, String programa, String transaccion) {
+        String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
+        UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+        
+        int txTimeout = validarAccesoYObtenerTimeout(mapping, programa, transaccion, apiUser);
+        String uuid = java.util.UUID.randomUUID().toString();
+        String fechaIso = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"));
 
-        // 1. OBTENCIÓN DE IDENTIDAD Y REGLAS DE NEGOCIO
-        String nombreUsuarioApi = SecurityContextHolder.getContext().getAuthentication().getName();
-        UsuarioCicsMapping mapeoConfiguracionMainframe = usuarioMappingService.obtenerCredencialesMainframe(nombreUsuarioApi);
-
-        // 2. SEGURIDAD PERIMETRAL Y SLA (Service Level Agreement)
-        // Valida si el usuario tiene permiso y recupera el tiempo máximo de espera (Timeout) de la tabla.
-        int tiempoMaximoEsperaSegundos = validarAccesoYObtenerTimeout(mapeoConfiguracionMainframe, nombreProgramaCics, idTransaccionCics, nombreUsuarioApi);
-
-        logger.info("Iniciando orquestación masiva: {} registros | Usuario API: {} | Programa: {} | Timeout: {}s", 
-                    listaDeDatosEntrada.size(), nombreUsuarioApi, nombreProgramaCics, tiempoMaximoEsperaSegundos);
-
-        // 3. GENERACIÓN DE TAREAS ASÍNCRONAS
-        // Utilizamos Java Streams para mapear cada dato de entrada a un hilo de ejecución independiente.
-        List<CompletableFuture<CicsDatosJsonResponse>> listaDeTareasPrometidas = listaDeDatosEntrada.stream()
-                .map(datoIndividual -> prepararTareaParaHilo(datoIndividual, mapeoConfiguracionMainframe, nombreProgramaCics, idTransaccionCics, nombreUsuarioApi, tiempoMaximoEsperaSegundos))
-                .collect(Collectors.toList());
-
-        // 4. CONSOLIDACIÓN DE RESULTADOS
-        // Esperamos a que la totalidad de los hilos finalicen (o den timeout) y recolectamos sus respuestas.
-        return CompletableFuture.allOf(listaDeTareasPrometidas.toArray(new CompletableFuture[0]))
-                .thenApply(v -> listaDeTareasPrometidas.stream()
-                        .map(CompletableFuture::join)
-                        .collect(Collectors.toList()))
-                .get();
+        try {
+            return CompletableFuture.supplyAsync(() -> {
+                long inicio = System.currentTimeMillis();
+                String respuesta = null;
+                String error = null;
+                int rc = 0;
+                try {
+                    respuesta = cicsService.enviaReciveCadena(cadenaEnviar, mapping.getCveUsuarioMainframe(), mapping.getDesPasswordMainframe(), programa, transaccion);
+                    return respuesta;
+                } catch (Exception e) {
+                    error = e.getMessage(); rc = -3; throw new RuntimeException(e);
+                } finally {
+                    long milis = System.currentTimeMillis() - inicio;
+                    auditoriaService.registrarBitacora(apiUser, programa, transaccion, cadenaEnviar, rc, milis, (rc == 0 ? "SUCCESS" : "ERROR"), error, uuid);
+                }
+            }, taskExecutor).get(txTimeout, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("Fallo en consulta individual (" + txTimeout + "s): " + e.getMessage());
+        }
     }
 
     /**
-     * CONFIGURACIÓN DEL CICLO DE VIDA DEL HILO (LIFECYCLE MANAGEMENT).
-     * 
-     * Prepara el entorno de ejecución para una sola petición:
-     * - Genera el UUID y la Fecha de inicio ANTES de disparar el hilo para evitar NULLs en caso de error.
-     * - Aplica el orTimeout dinámico.
-     * - Dispara la auditoría al finalizar sin importar el resultado (éxito/error/timeout).
+     * MÉTODO 2: PROCESAMIENTO CONCURRENTE (LISTA SIMPLE).
+     */
+    @Override
+    public List<CicsDatosResponse> procesarConcurrentemente(List<String> datosEntradaList, String u, String p, String prog, String trans) throws InterruptedException, ExecutionException {
+        String apiUser = SecurityContextHolder.getContext().getAuthentication().getName();
+        UsuarioCicsMapping mapping = usuarioMappingService.obtenerCredencialesMainframe(apiUser);
+        int txTimeout = validarAccesoYObtenerTimeout(mapping, prog, trans, apiUser);
+
+        List<CompletableFuture<CicsDatosResponse>> futures = datosEntradaList.stream().map(dato -> {
+            String uuid = java.util.UUID.randomUUID().toString();
+            long inicio = System.currentTimeMillis();
+            return CompletableFuture.supplyAsync(() -> 
+                cicsService.enviaReciveCadena(dato, mapping.getCveUsuarioMainframe(), mapping.getDesPasswordMainframe(), prog, trans), taskExecutor)
+                .orTimeout(txTimeout, TimeUnit.SECONDS)
+                .handle((res, ex) -> {
+                    long milis = System.currentTimeMillis() - inicio;
+                    String err = (ex != null) ? ex.getMessage() : null;
+                    String est = (ex == null) ? "SUCCESS" : (ex instanceof TimeoutException ? "TIMEOUT" : "ERROR");
+                    auditoriaService.registrarBitacora(apiUser, prog, trans, dato, (ex == null ? 0 : -1), milis, est, err, uuid);
+                    return CicsDatosResponse.builder().datoEntrada(dato).cicsResponse(res).errorMessage(err).elapsedTimeMs(milis).build();
+                });
+        }).collect(Collectors.toList());
+
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).thenApply(v -> futures.stream().map(CompletableFuture::join).collect(Collectors.toList())).get();
+    }
+
+    /**
+     * MÉTODO 3: PROCESAMIENTO CONCURRENTE CON PARSEO JSON (ORQUESTADOR MASIVO).
+     */
+    @Override
+    public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
+            List<String> listaDeDatosEntrada, String userLeg, String passLeg, 
+            String nombreProgramaCics, String idTransaccionCics) throws InterruptedException, ExecutionException {
+
+        String nombreUsuarioApi = SecurityContextHolder.getContext().getAuthentication().getName();
+        UsuarioCicsMapping mapeoConfiguracion = usuarioMappingService.obtenerCredencialesMainframe(nombreUsuarioApi);
+
+        // Seguridad ABAC e identificación de SLA (Timeout)
+        int tiempoMaximoEspera = validarAccesoYObtenerTimeout(mapeoConfiguracion, nombreProgramaCics, idTransaccionCics, nombreUsuarioApi);
+
+        logger.info("Orquestando ejecución masiva: {} registros | Usuario: {} | Programa: {} | SLA: {}s", 
+                    listaDeDatosEntrada.size(), nombreUsuarioApi, nombreProgramaCics, tiempoMaximoEspera);
+
+        // Reparto de carga asíncrona
+        List<CompletableFuture<CicsDatosJsonResponse>> listaTareas = listaDeDatosEntrada.stream()
+                .map(dato -> prepararTareaParaHilo(dato, mapeoConfiguracion, nombreProgramaCics, idTransaccionCics, nombreUsuarioApi, tiempoMaximoEspera))
+                .collect(Collectors.toList());
+
+        return CompletableFuture.allOf(listaTareas.toArray(new CompletableFuture[0]))
+                .thenApply(v -> listaTareas.stream().map(CompletableFuture::join).collect(Collectors.toList()))
+                .get();
+    }
+
+    // --- MÉTODOS PRIVADOS DE GESTIÓN (ENCAPSULAMIENTO) ---
+
+    /**
+     * GESTIÓN DEL CICLO DE VIDA DEL HILO (LIFECYCLE).
      */
     private CompletableFuture<CicsDatosJsonResponse> prepararTareaParaHilo(
-            String datoEntrada, 
-            UsuarioCicsMapping mapeo, 
-            String programa, 
-            String transaccion, 
-            String usuarioApi, 
-            int timeoutConfigurado) {
+            String dato, UsuarioCicsMapping mapeo, String prog, String trans, String userApi, int timeout) {
 
-        // Estos valores se capturan aquí para estar disponibles en el bloque .handle aunque el Mainframe falle.
-        final String uuidIdentificadorUnico = java.util.UUID.randomUUID().toString();
-        final String fechaPeticionIso = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"));
-        final long momentoInicioMilisegundos = System.currentTimeMillis();
+        final String uuidFijo = java.util.UUID.randomUUID().toString();
+        final String fechaIsoFija = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSS"));
+        final long momentoInicio = System.currentTimeMillis();
 
         return CompletableFuture.supplyAsync(() -> {
-            // EJECUCIÓN TÉCNICA: Llamada al Mainframe y limpieza de datos
-            return ejecutarLlamadaMainframeYExtraerJson(datoEntrada, mapeo, programa, transaccion, uuidIdentificadorUnico, fechaPeticionIso);
+            return ejecutarLlamadaMainframeYExtraerJson(dato, mapeo, prog, trans, uuidFijo, fechaIsoFija);
         }, taskExecutor)
-        .orTimeout(timeoutConfigurado, TimeUnit.SECONDS) // APLICACIÓN DE SLA (Corta la conexión si el host no responde)
-        .handle((resultadoExitoso, excepcionCapturada) -> {
-            // CIERRE Y AUDITORÍA: Sincroniza la respuesta al cliente con la base de datos
-            return finalizarProcesoYAuditar(datoEntrada, resultadoExitoso, excepcionCapturada, momentoInicioMilisegundos, 
-                                        timeoutConfigurado, usuarioApi, programa, transaccion, uuidIdentificadorUnico, fechaPeticionIso);
+        .orTimeout(timeout, TimeUnit.SECONDS)
+        .handle((resultado, error) -> {
+            return finalizarProcesoYAuditar(dato, resultado, error, momentoInicio, timeout, userApi, prog, trans, uuidFijo, fechaIsoFija);
         });
     }
 
     /**
-     * LÓGICA DE NEGOCIO E INTERACCIÓN CON EL HOST.
-     * 
-     * Este método contiene la lógica "sucia" de comunicación:
-     * - Envío de datos al CICS.
-     * - Algoritmo de localización de estructuras JSON ({ } o [ ]) en la respuesta cruda.
+     * EJECUCIÓN TÉCNICA Y PARSEO: Interactúa con el Host y limpia la basura textual del JSON.
      */
-    private CicsDatosJsonResponse ejecutarLlamadaMainframeYExtraerJson(
-            String dato, 
-            UsuarioCicsMapping mapeo, 
-            String prog, 
-            String trans, 
-            String uuidAsignado, 
-            String fechaAsignada) {
-
-        // COMUNICACIÓN FÍSICA: Usamos el servicio CICS central
-        String respuestaCrudaMainframe = cicsService.enviaReciveCadena(dato, mapeo.getCveUsuarioMainframe(), mapeo.getDesPasswordMainframe(), prog, trans);
+    private CicsDatosJsonResponse ejecutarLlamadaMainframeYExtraerJson(String dato, UsuarioCicsMapping mapeo, String prog, String trans, String uuid, String fecha) {
         
-        // Preparación del constructor con los metadatos de trazabilidad ya asignados
-        CicsDatosJsonResponse.CicsDatosJsonResponseBuilder constructorRespuesta = 
-                CicsDatosJsonResponse.builder()
-                .datoEntrada(dato)
-                .uuidTransaccion(uuidAsignado)
-                .fechaPeticionIso(fechaAsignada); 
+        String respuestaHost = cicsService.enviaReciveCadena(dato, mapeo.getCveUsuarioMainframe(), mapeo.getDesPasswordMainframe(), prog, trans);
+        
+        CicsDatosJsonResponse.CicsDatosJsonResponseBuilder builder = CicsDatosJsonResponse.builder()
+                .datoEntrada(dato).uuidTransaccion(uuid).fechaPeticionIso(fecha);
 
-        if (respuestaCrudaMainframe == null || respuestaCrudaMainframe.trim().isEmpty()) {
-            return constructorRespuesta.errorMessage("Mainframe devolvió respuesta nula o vacía").build();
+        if (respuestaHost == null || respuestaHost.trim().isEmpty()) {
+            return builder.errorCode(-4).errorMessage("Mainframe devolvió respuesta vacía").build();
         }
 
-        // EXTRACCIÓN DE JSON: Localizamos el primer y último delimitador de estructura
-        int indiceInicioJson = Math.max(respuestaCrudaMainframe.indexOf("{"), respuestaCrudaMainframe.indexOf("["));
-        int indiceFinJson = Math.max(respuestaCrudaMainframe.lastIndexOf("}"), respuestaCrudaMainframe.lastIndexOf("]"));
+        // Algoritmo de localización de estructuras JSON
+        int inicio = Math.max(respuestaHost.indexOf("{"), respuestaHost.indexOf("["));
+        int fin = Math.max(respuestaHost.lastIndexOf("}"), respuestaHost.lastIndexOf("]"));
 
-        if (indiceInicioJson >= 0 && indiceFinJson >= 0 && indiceFinJson > indiceInicioJson) {
-            String parteHeaderTexto = respuestaCrudaMainframe.substring(0, indiceInicioJson).trim();
-            String parteJsonPuro = respuestaCrudaMainframe.substring(indiceInicioJson, indiceFinJson + 1);
-            
+        if (inicio >= 0 && fin >= 0 && fin > inicio) {
+            String header = respuestaHost.substring(0, inicio).trim();
+            String jsonPart = respuestaHost.substring(inicio, fin + 1);
             try {
-                // Intentamos convertir el texto a un objeto JSON (Map/List)
-                Object objetoJsonValidado = objectMapper.readTree(parteJsonPuro);
-                return constructorRespuesta.headerResponse(parteHeaderTexto).jsonResponse(objetoJsonValidado).build();
+                return builder.errorCode(0).headerResponse(header).jsonResponse(objectMapper.readTree(jsonPart)).build();
             } catch (Exception e) {
-                // El JSON está incompleto o mal formado (Error de comunicación o lógica COBOL)
-                return constructorRespuesta.headerResponse(respuestaCrudaMainframe).errorMessage("Error de formato JSON: " + e.getMessage()).build();
+                return builder.errorCode(-2).headerResponse(respuestaHost).errorMessage("Error Formato JSON: " + e.getMessage()).build();
             }
-        } else {
-            // Respuesta puramente textual sin estructura JSON
-            return constructorRespuesta.headerResponse(respuestaCrudaMainframe.trim()).errorMessage("No se detectó estructura JSON").build();
         }
+        return builder.errorCode(-2).headerResponse(respuestaHost.trim()).errorMessage("No se detectó estructura JSON").build();
     }
 
     /**
-     * CIERRE, AUDITORÍA ASÍNCRONA Y CONSTRUCCIÓN DE RESPUESTA FINAL.
-     * 
-     * Sincroniza el resultado técnico (éxito o error) con la bitácora institucional.
-     * Garantiza que el UUID y la Fecha aparezcan siempre en la respuesta final.
+     * CIERRE Y AUDITORÍA: Sincroniza la respuesta final con la bitácora institucional.
      */
     private CicsDatosJsonResponse finalizarProcesoYAuditar(
-            String dato, 
-            CicsDatosJsonResponse resultadoHilo, 
-            Throwable excepcionCapturada, 
-            long inicioMilis, 
-            int timeoutSec, 
-            String usuarioApi, 
-            String prog, 
-            String trans, 
-            String uuidFijo, 
-            String fechaFija) {
+            String dato, CicsDatosJsonResponse res, Throwable ex, long inicio, int timeout, 
+            String user, String prog, String trans, String uuid, String fecha) {
 
-        long tiempoTranscurridoMilis = System.currentTimeMillis() - inicioMilis;
-        String mensajeErrorFinal = (resultadoHilo != null) ? resultadoHilo.getErrorMessage() : null;
-        String estadoAuditoria = "SUCCESS";
-        int rcAuditoria = 0;
+        long totalMilis = System.currentTimeMillis() - inicio;
+        int codigoFinal = (res != null && res.getErrorCode() != null) ? res.getErrorCode() : 0;
+        String msgError = (res != null) ? res.getErrorMessage() : null;
+        String estadoAudit = "SUCCESS";
 
-        // EVALUACIÓN TÉCNICA DEL RESULTADO
-        if (excepcionCapturada != null) {
-            // El hilo terminó por una excepción (posiblemente Timeout)
-            boolean esTimeout = (excepcionCapturada instanceof TimeoutException || excepcionCapturada.getCause() instanceof TimeoutException);
-            estadoAuditoria = esTimeout ? "TIMEOUT" : "ERROR_SIST";
-            mensajeErrorFinal = esTimeout ? "Timeout: El sistema no respondió en el tiempo límite (" + timeoutSec + "s)" : excepcionCapturada.getMessage();
-            rcAuditoria = -1;
-            logger.warn("Transacción fallida [{}]: {} en {}ms", uuidFijo, estadoAuditoria, tiempoTranscurridoMilis);
-        } else if (mensajeErrorFinal != null) {
-            // El hilo terminó pero con un error de proceso (parseo o respuesta vacía)
-            estadoAuditoria = "ERROR_PROC";
-            rcAuditoria = -2;
+        if (ex != null) {
+            boolean esTimeout = (ex instanceof TimeoutException || ex.getCause() instanceof TimeoutException);
+            codigoFinal = esTimeout ? -1 : -3;
+            estadoAudit = esTimeout ? "TIMEOUT" : "ERROR_SIST";
+            msgError = esTimeout ? "Timeout: Sin respuesta en " + timeout + "s" : ex.getMessage();
+        } else if (codigoFinal < 0) {
+            estadoAudit = "ERROR_PROC";
         }
 
-        // AUDITORÍA INSTITUCIONAL: Se lanza de forma asíncrona para no afectar el tiempo de respuesta
-        auditoriaService.registrarBitacora(usuarioApi, prog, trans, dato, 
-                                           rcAuditoria, tiempoTranscurridoMilis, 
-                                           estadoAuditoria, mensajeErrorFinal, uuidFijo);
+        // Persistencia asíncrona (9 parámetros requeridos por AuditoriaService)
+        auditoriaService.registrarBitacora(user, prog, trans, dato, codigoFinal, totalMilis, estadoAudit, msgError, uuid);
 
-        // CONSTRUCCIÓN DEL OBJETO DE RESPUESTA FINAL PARA EL CLIENTE
         return CicsDatosJsonResponse.builder()
                 .datoEntrada(dato)
-                .headerResponse(resultadoHilo != null ? resultadoHilo.getHeaderResponse() : null)
-                .jsonResponse(resultadoHilo != null ? resultadoHilo.getJsonResponse() : null)
-                .errorMessage(mensajeErrorFinal)
-                .elapsedTimeMs(tiempoTranscurridoMilis)
-                .uuidTransaccion(uuidFijo) 
-                .fechaPeticionIso(fechaFija)
+                .errorCode(codigoFinal)
+                .errorMessage(msgError)
+                .headerResponse(res != null ? res.getHeaderResponse() : null)
+                .jsonResponse(res != null ? res.getJsonResponse() : null)
+                .elapsedTimeMs(totalMilis)
+                .uuidTransaccion(uuid)
+                .fechaPeticionIso(fecha)
                 .build();
     }
 
     /**
-     * SEGURIDAD ABAC (ATTRIBUTE-BASED ACCESS CONTROL).
-     * 
-     * Valida si el usuario tiene privilegios para el binomio Programa-Transacción
-     * y recupera el SLA (Timeout) correspondiente.
+     * SEGURIDAD ABAC: Valida privilegios y recupera el SLA (Timeout) de la transacción.
      */
     private int validarAccesoYObtenerTimeout(UsuarioCicsMapping mapping, String programa, String transaccion, String apiUser) {
-        String llaveAcceso = programa.trim() + "-" + transaccion.trim();
-        
-        if (mapping.getPermisosConTimeout() == null || !mapping.getPermisosConTimeout().containsKey(llaveAcceso)) {
-            logger.error("BLOQUEO DE SEGURIDAD: Usuario [{}] intentó ejecutar [{}] sin autorización.", apiUser, llaveAcceso);
-            throw new RuntimeException("Acceso Denegado: No tiene permisos para ejecutar " + llaveAcceso);
+        String llave = programa.trim() + "-" + transaccion.trim();
+        if (mapping.getPermisosConTimeout() == null || !mapping.getPermisosConTimeout().containsKey(llave)) {
+            logger.error("ACCESO DENEGADO: Usuario [{}] intentó ejecutar [{}] sin permiso.", apiUser, llave);
+            throw new RuntimeException("Acceso Denegado: No tiene permisos para ejecutar " + llave);
         }
-        
-        return mapping.getPermisosConTimeout().get(llaveAcceso);
+        return mapping.getPermisosConTimeout().get(llave);
     }
-
-    
 }
