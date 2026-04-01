@@ -1,6 +1,8 @@
 package mx.gob.imss.cics.service;
  
  
+import static org.mockito.Mockito.timeout;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -382,11 +384,24 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
     }    
 */
 
-    /**
-     * PUNTO DE ENTRADA PRINCIPAL: ORQUESTADOR DE CONSULTAS CONCURRENTES
+ /**
+     * PUNTO DE ENTRADA PRINCIPAL: ORQUESTADOR DE CONSULTAS CONCURRENTES CON PARSEO JSON.
      * 
-     * Este método recibe una lista de peticiones y las procesa en paralelo
-     * utilizando los hilos configurados y validando la seguridad por cada transacción.
+     * Este método centraliza la orquestación masiva de peticiones. Realiza las siguientes acciones:
+     * 1. Identifica al usuario del API mediante el contexto de seguridad (JWT).
+     * 2. Recupera el mapeo de credenciales de Mainframe y permisos desde la caché/BD.
+     * 3. Valida el acceso (ABAC) y recupera el timeout específico por transacción.
+     * 4. Distribuye la carga de trabajo en hilos asíncronos paralelos.
+     * 5. Consolida los resultados individuales en una respuesta colectiva para el cliente.
+     *
+     * @param listaDeDatosEntrada       Lista de cadenas (ej. NSS) a procesar.
+     * @param usuarioParametroIgnorado  Parametro legacy, se ignora en favor del mapeo dinámico.
+     * @param passwordParametroIgnorado Parametro legacy, se ignora en favor del mapeo dinámico.
+     * @param nombreProgramaCics        Nombre del programa COBOL en CICS.
+     * @param idTransaccionCics         ID de la transacción CICS asociada.
+     * @return List de {@link CicsDatosJsonResponse} con el detalle de cada ejecución.
+     * @throws InterruptedException Si se interrumpe la espera de los hilos.
+     * @throws ExecutionException   Si ocurre un error fatal durante la orquestación.
      */
     @Override
     public List<CicsDatosJsonResponse> procesarConcurrentementeJson(
@@ -396,24 +411,25 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
             String nombreProgramaCics, 
             String idTransaccionCics) throws InterruptedException, ExecutionException {
 
-        // 1. OBTENER IDENTIDAD: Identificamos quién llama desde el Token JWT
+        // 1. OBTENCIÓN DE IDENTIDAD: Extraemos el usuario autenticado desde el Token JWT
         String nombreUsuarioApi = SecurityContextHolder.getContext().getAuthentication().getName();
 
-        // 2. RECUPERAR MAPEO: Buscamos en base de datos (o caché) sus credenciales de Mainframe
+        // 2. RECUPERACIÓN DE CONFIGURACIÓN: Obtenemos credenciales de Mainframe y diccionario de permisos
         UsuarioCicsMapping mapeoIdentidadMainframe = usuarioMappingService.obtenerCredencialesMainframe(nombreUsuarioApi);
 
-        // 3. VALIDAR PERMISOS Y TIEMPO: Verificamos si puede ejecutar este programa y cuánto tiempo le damos
-        // Este método lanza una excepción si no tiene permiso, bloqueando la ejecución.
-        int tiempoLimiteSegundos = validarAccesoYObtenerTimeout(mapeoIdentidadMainframe, nombreProgramaCics, idTransaccionCics, nombreUsuarioApi);
+        // 3. VALIDACIÓN DE ACCESO Y TIMEOUT: Verificamos privilegios y obtenemos el tiempo límite (SLA) de la transacción
+        // Este método es una 'puerta de seguridad'; si falla, lanza RuntimeException inmediatamente.
+        int tiempoMaximoEsperaSegundos = validarAccesoYObtenerTimeout(mapeoIdentidadMainframe, nombreProgramaCics, idTransaccionCics, nombreUsuarioApi);
 
-        logger.info("Iniciando orquestación masiva: {} registros | Usuario API: {} | Programa: {} | Timeout: {}s",  listaDeDatosEntrada.size(), nombreUsuarioApi, nombreProgramaCics, tiempoLimiteSegundos);
+        logger.info("Iniciando orquestación masiva: {} registros | Usuario API: {} | Programa: {} | Timeout: {}s", 
+                    listaDeDatosEntrada.size(), nombreUsuarioApi, nombreProgramaCics, tiempoMaximoEsperaSegundos);
 
-        // 4. LANZAR HILOS: Por cada dato en la lista, creamos una tarea asíncrona independiente
+        // 4. DISTRIBUCIÓN PARALELA: Creamos una tarea asíncrona por cada elemento de entrada
         List<CompletableFuture<CicsDatosJsonResponse>> listaDeTareasPrometidas = listaDeDatosEntrada.stream()
-                .map(datoIndividual -> prepararTareaParaHilo(datoIndividual, mapeoIdentidadMainframe, nombreProgramaCics, idTransaccionCics, nombreUsuarioApi, tiempoLimiteSegundos))
+                .map(datoIndividual -> prepararTareaParaHilo(datoIndividual, mapeoIdentidadMainframe, nombreProgramaCics, idTransaccionCics, nombreUsuarioApi, tiempoMaximoEsperaSegundos))
                 .collect(Collectors.toList());
 
-        // 5. CONSOLIDAR RESULTADOS: Esperamos a que todos los hilos terminen (o den timeout) y juntamos las respuestas
+        // 5. CONSOLIDACIÓN: Esperamos a que la totalidad de los hilos finalicen (o den timeout) para retornar la lista
         return CompletableFuture.allOf(listaDeTareasPrometidas.toArray(new CompletableFuture[0]))
                 .thenApply(v -> listaDeTareasPrometidas.stream()
                         .map(CompletableFuture::join)
@@ -422,10 +438,20 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
     }
 
     /**
-     * MÉTODO DE GESTIÓN DE HILOS (LIFECYCLE)
+     * MÉTODO DE GESTIÓN DEL CICLO DE VIDA DEL HILO (LIFECYCLE).
      * 
-     * Configura el comportamiento de un solo hilo: qué código ejecutar, cuánto tiempo
-     * esperar y qué hacer cuando termine (ya sea con éxito o con error).
+     * Define la "envoltura" asíncrona de una petición. Gestiona:
+     * - El inicio del cronómetro de ejecución.
+     * - El disparo del timeout configurado en la base de datos.
+     * - El manejo de excepciones tanto técnicas como de tiempo agotado.
+     * 
+     * @param datoEntrada        Cadena de datos a enviar.
+     * @param mapeo              Objeto con credenciales de Mainframe autorizadas.
+     * @param programa           Nombre del programa CICS.
+     * @param transaccion        ID de la transacción CICS.
+     * @param usuarioApi         Nombre del usuario que originó la petición.
+     * @param timeoutConfigurado Tiempo límite en segundos para este hilo.
+     * @return Un {@link CompletableFuture} que eventualmente contendrá la respuesta procesada.
      */
     private CompletableFuture<CicsDatosJsonResponse> prepararTareaParaHilo(
             String datoEntrada, 
@@ -435,126 +461,147 @@ public String realizarConsultaCics(String cadenaEnviar, String usuarioReq, Strin
             String usuarioApi, 
             int timeoutConfigurado) {
 
-        // Capturamos el momento exacto en que inicia este hilo específico
+        // Captura del tiempo inicial para cálculo preciso de latencia en milisegundos
         final long momentoInicioMilisegundos = System.currentTimeMillis();
 
         return CompletableFuture.supplyAsync(() -> {
-            // PASO A: Llamada real al Mainframe y extracción del JSON
+            // PASO A: Ejecución de la lógica de comunicación y extracción de datos
             return ejecutarLlamadaMainframeYExtraerJson(datoEntrada, mapeo, programa, transaccion);
         }, taskExecutor)
-        .orTimeout(timeoutConfigurado, TimeUnit.SECONDS) // PASO B: Aplicar la "guillotina" de tiempo de la tabla
+        .orTimeout(timeoutConfigurado, TimeUnit.SECONDS) // PASO B: Control de Timeout dinámico
         .handle((resultadoExitoso, excepcionCapturada) -> {
-            // PASO C: Finalizar el proceso, registrar bitácora y construir respuesta para el cliente
+            // PASO C: Finalización de proceso, registro de auditoría y construcción de DTO final
             return finalizarProcesoYAuditar(datoEntrada, resultadoExitoso, excepcionCapturada, momentoInicioMilisegundos, 
                                         timeoutConfigurado, usuarioApi, programa, transaccion);
         });
     }
 
     /**
-     * MÉTODO DE LÓGICA DE NEGOCIO (EL TRABAJO REAL)
+     * MÉTODO DE LÓGICA DE NEGOCIO (EJECUCIÓN TÉCNICA).
      * 
-     * Este método contiene la lógica pura de comunicación y limpieza de datos.
-     * Es el que se ejecuta dentro de cada hilo.
+     * Realiza la interacción física con el Mainframe. Sus responsabilidades son:
+     * 1. Generar un identificador único (UUID) para asegurar la idempotencia.
+     * 2. Llamar al servicio CICS (CicsService) con las credenciales mapeadas.
+     * 3. Localizar y extraer estructuras JSON { } o [ ] dentro de la respuesta EBCDIC.
+     * 
+     * @param dato        Datos de entrada originales.
+     * @param mapeo       Contenedor de credenciales de Mainframe.
+     * @param prog        Programa CICS a invocar.
+     * @param trans       Transacción CICS.
+     * @return {@link CicsDatosJsonResponse} parcial con el JSON parseado y el UUID.
      */
     private CicsDatosJsonResponse ejecutarLlamadaMainframeYExtraerJson(String dato, UsuarioCicsMapping mapeo, String prog, String trans) {
 
-        // 1. GENERAR IDENTIFICADOR ÚNICO DE TRANSACCIÓN (Idempotencia)
-        // Este código garantiza que cada registro de la lista tenga su propio ADN único.
-        String uuidUnico = java.util.UUID.randomUUID().toString();
+        // 1. GENERACIÓN DE TOKEN DE IDEMPOTENCIA: Garantiza trazabilidad única por registro
+        String uuidIdentificadorUnico = java.util.UUID.randomUUID().toString();
 
-
-        // 2. PREPARAR CADENA PARA EL MAINFRAME
-        // Concatenamos el dato original con el UUID usando un separador (ej. pipe '|')
-        // IMPORTANTE: El equipo de Mainframe debe estar avisado para leer el UUID después del '|'
-       // String cadenaConIdempotencia = dato + "|" + uuidUnico;
-         String cadenaConIdempotencia = dato  ;
+        // 2. PREPARACIÓN DE CADENA: En este punto se puede anexar el UUID si el COBOL lo requiere
+        // String cadenaConIdempotencia = dato + "|" + uuidIdentificadorUnico;
+        String cadenaDeEnvioFinal = dato;
         
-        // 1. Enviar los datos al Mainframe usando las credenciales mapeadas de la BD
-        String respuestaCrudaMainframe = cicsService.enviaReciveCadena(cadenaConIdempotencia, mapeo.getCveUsuarioMainframe(), mapeo.getDesPasswordMainframe(), prog, trans);
+        // 3. COMUNICACIÓN FÍSICA: Envío al CICS Transaction Gateway (CTG)
+        String respuestaCrudaMainframe = cicsService.enviaReciveCadena(cadenaDeEnvioFinal, mapeo.getCveUsuarioMainframe(), mapeo.getDesPasswordMainframe(), prog, trans);
         
-        // Preparamos el constructor de la respuesta
-        CicsDatosJsonResponse.CicsDatosJsonResponseBuilder constructorRespuesta = CicsDatosJsonResponse.builder().datoEntrada(dato).uuidTransaccion(uuidUnico); ;
+        // Inicializamos el constructor de respuesta vinculando el UUID desde este momento
+        CicsDatosJsonResponse.CicsDatosJsonResponseBuilder constructorDeRespuesta = 
+                CicsDatosJsonResponse.builder()
+                .datoEntrada(dato)
+                .uuidTransaccion(uuidIdentificadorUnico); 
 
         if (respuestaCrudaMainframe == null || respuestaCrudaMainframe.trim().isEmpty()) {
-            return constructorRespuesta.errorMessage("El Mainframe devolvió una respuesta vacía").build();
+            return constructorDeRespuesta.errorMessage("El Mainframe devolvió una respuesta vacía").build();
         }
 
-        // 2. BUSCAR ESTRUCTURA JSON: Localizamos el inicio '{' o '[' y el final '}' o ']'
-        int indiceInicioJson = Math.max(respuestaCrudaMainframe.indexOf("{"), respuestaCrudaMainframe.indexOf("["));
-        int indiceFinJson = Math.max(respuestaCrudaMainframe.lastIndexOf("}"), respuestaCrudaMainframe.lastIndexOf("]"));
+        // 4. ALGORITMO DE EXTRACCIÓN JSON: Localizamos delimitadores de objetos o arreglos
+        int indiceInicioEstructura = Math.max(respuestaCrudaMainframe.indexOf("{"), respuestaCrudaMainframe.indexOf("["));
+        int indiceFinEstructura = Math.max(respuestaCrudaMainframe.lastIndexOf("}"), respuestaCrudaMainframe.lastIndexOf("]"));
 
-        // 3. PARSEAR SI EXISTE: Si encontramos las llaves, separamos el texto del JSON
-        if (indiceInicioJson >= 0 && indiceFinJson >= 0 && indiceFinJson > indiceInicioJson) {
-            String parteTextoHeader = respuestaCrudaMainframe.substring(0, indiceInicioJson).trim();
-            String parteJsonPuro = respuestaCrudaMainframe.substring(indiceInicioJson, indiceFinJson + 1);
+        if (indiceInicioEstructura >= 0 && indiceFinEstructura >= 0 && indiceFinEstructura > indiceInicioEstructura) {
+            String parteTextoInformativo = respuestaCrudaMainframe.substring(0, indiceInicioEstructura).trim();
+            String parteJsonPotencial = respuestaCrudaMainframe.substring(indiceInicioEstructura, indiceFinEstructura + 1);
             
             try {
-                // Intentamos convertir la cadena de texto en un objeto JSON real
-                Object objetoJsonConvertido = objectMapper.readTree(parteJsonPuro);
-                return constructorRespuesta.headerResponse(parteTextoHeader).jsonResponse(objetoJsonConvertido).build();
+                // Intentamos convertir el segmento de texto en un objeto JSON estructurado
+                Object objetoJsonValidado = objectMapper.readTree(parteJsonPotencial);
+                return constructorDeRespuesta.headerResponse(parteTextoInformativo).jsonResponse(objetoJsonValidado).build();
             } catch (Exception e) {
-                // Si el JSON viene mal formado (ej. truncado por el Mainframe)
-                return constructorRespuesta.headerResponse(respuestaCrudaMainframe).errorMessage("Error de formato JSON: " + e.getMessage()).build();
+                // El JSON está mal formado o incompleto (posible truncamiento en Mainframe)
+                return constructorDeRespuesta.headerResponse(respuestaCrudaMainframe).errorMessage("Fallo al parsear estructura JSON: " + e.getMessage()).build();
             }
         } else {
-            // No se detectó ninguna estructura JSON, devolvemos todo como texto plano en el header
-            return constructorRespuesta.headerResponse(respuestaCrudaMainframe.trim()).errorMessage("No se detectó estructura JSON en la respuesta").build();
+            // Respuesta de texto plano sin estructuras JSON detectadas
+            return constructorDeRespuesta.headerResponse(respuestaCrudaMainframe.trim()).errorMessage("No se detectó una estructura JSON válida en la respuesta").build();
         }
     }
 
     /**
-     * MÉTODO DE CIERRE Y AUDITORÍA
+     * MÉTODO DE FINALIZACIÓN Y AUDITORÍA ASÍNCRONA.
      * 
-     * Este método sincroniza lo que el usuario recibe con lo que se guarda en la bitácora.
-     * Es crucial para que la base de datos refleje si hubo un TIMEOUT real.
+     * Este método garantiza la consistencia entre lo que se le responde al cliente y lo que se persiste.
+     * Se encarga de:
+     * 1. Determinar el estado final (SUCCESS, TIMEOUT o ERROR).
+     * 2. Registrar el evento en la tabla MSCT_AUDITORIA_CICS de forma asíncrona.
+     * 3. Asegurar que el UUID de transacción aparezca en la respuesta JSON final.
+     * 
+     * @param dato                 Dato de entrada procesado.
+     * @param resultadoHilo        Resultado exitoso del paso anterior (si existe).
+     * @param excepcionControlada  Error o excepción capturada (si existe).
+     * @param inicioMilis          Tiempo en que inició la petición.
+     * @param timeoutConfigurado   Tiempo máximo que se le otorgó a la petición.
+     * @param usuarioApi           Usuario responsable.
+     * @param prog                 Programa ejecutado.
+     * @param trans                Transacción ejecutada.
+     * @return Objeto final {@link CicsDatosJsonResponse} listo para serialización JSON.
      */
     private CicsDatosJsonResponse finalizarProcesoYAuditar(
             String dato, 
             CicsDatosJsonResponse resultadoHilo, 
             Throwable excepcionControlada, 
             long inicioMilis, 
-            int timeout, 
+            int timeoutConfigurado, 
             String usuarioApi, 
             String prog, 
             String trans) {
 
-        // Calculamos el tiempo real que tardó (o el tiempo que pasó hasta que dio timeout)
+        // Cálculo de latencia total
         long tiempoTranscurridoMilisegundos = System.currentTimeMillis() - inicioMilis;
         
-        String mensajeErrorFinal = (resultadoHilo != null) ? resultadoHilo.getErrorMessage() : null;
+        String mensajeDeErrorFinal = (resultadoHilo != null) ? resultadoHilo.getErrorMessage() : null;
         String estadoParaAuditoria = "SUCCESS";
         int codigoRetornoAuditoria = 0;
 
-        // EVALUACIÓN DE RESULTADO: ¿Terminó bien o hubo un error/timeout?
+        // Recuperación del UUID de trazabilidad (se extrae del resultado previo para mantener consistencia)
+        String uuidIdentificadorFinal = (resultadoHilo != null) ? resultadoHilo.getUuidTransaccion() : "N/A";
+
+        // ANÁLISIS DE RESULTADO TÉCNICO
         if (excepcionControlada != null) {
-            // Revisamos si la causa del fallo fue que se acabó el tiempo (Timeout)
-            boolean esFallaPorTiempo = (excepcionControlada instanceof TimeoutException || excepcionControlada.getCause() instanceof TimeoutException);
+            // Evaluamos si el fallo fue provocado por el disparador de tiempo (orTimeout)
+            boolean esFallaPorTimeout = (excepcionControlada instanceof TimeoutException || excepcionControlada.getCause() instanceof TimeoutException);
             
-            estadoParaAuditoria = esFallaPorTiempo ? "TIMEOUT" : "ERROR_SIST";
-            mensajeErrorFinal = esFallaPorTiempo ? "Timeout: El sistema no respondió en " + timeout + "s" : excepcionControlada.getMessage();
+            estadoParaAuditoria = esFallaPorTimeout ? "TIMEOUT" : "ERROR_SIST";
+            mensajeDeErrorFinal = esFallaPorTimeout ? "Timeout: El sistema no respondió en el tiempo límite (" + timeoutConfigurado + "s)" : excepcionControlada.getMessage();
             codigoRetornoAuditoria = -1;
-        } else if (mensajeErrorFinal != null) {
-            // El hilo terminó pero traía un error de negocio o de parseo
+        } else if (mensajeDeErrorFinal != null) {
+            // El hilo terminó pero se identificó un error lógico o de formato
             estadoParaAuditoria = "ERROR_PROC";
             codigoRetornoAuditoria = -2;
         }
 
-            // Extraemos el UUID que generamos en el paso anterior
-    String uuidParaBd = (resultadoHilo != null) ? resultadoHilo.getUuidTransaccion() : "N/A";
-
-        // REGISTRO ASÍNCRONO EN LA TABLA MSCT_AUDITORIA_CICS
+        // PERSISTENCIA EN BITÁCORA INSTITUCIONAL: Se realiza de forma no bloqueante (@Async)
         auditoriaService.registrarBitacora(usuarioApi, prog, trans, dato, 
                                         codigoRetornoAuditoria, tiempoTranscurridoMilisegundos, 
-                                        estadoParaAuditoria, mensajeErrorFinal, uuidParaBd);
+                                        estadoParaAuditoria, mensajeDeErrorFinal, uuidIdentificadorFinal);
 
-        // CONSTRUIR OBJETO FINAL PARA EL JSON DE POSTMAN
+        // CONSTRUCCIÓN DEL OBJETO DE RESPUESTA FINAL (Garantizando el UUID en el JSON de salida)
         return CicsDatosJsonResponse.builder()
                 .datoEntrada(dato)
                 .headerResponse(resultadoHilo != null ? resultadoHilo.getHeaderResponse() : null)
                 .jsonResponse(resultadoHilo != null ? resultadoHilo.getJsonResponse() : null)
-                .errorMessage(mensajeErrorFinal)
-                .elapsedTimeMs(tiempoTranscurridoMilisegundos) // Tiempo real medido con precisión
+                .errorMessage(mensajeDeErrorFinal)
+                .elapsedTimeMs(tiempoTranscurridoMilisegundos)
+                .uuidTransaccion(uuidIdentificadorFinal) // <--- ASIGNACIÓN CRUCIAL PARA VISIBILIDAD EN POSTMAN
                 .build();
     }
 
+ 
 }
