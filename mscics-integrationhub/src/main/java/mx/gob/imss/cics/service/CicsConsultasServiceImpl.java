@@ -1,7 +1,6 @@
 package mx.gob.imss.cics.service;
  
- 
-import static org.mockito.Mockito.timeout;
+  
 
 import java.util.ArrayList;
 import java.util.List;
