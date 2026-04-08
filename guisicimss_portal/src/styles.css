@@ -1,0 +1,36 @@
+
+@import "bootstrap-icons/font/bootstrap-icons.css";
+
+
+.modal-firma-amplio .modal-dialog {
+    width: 1200px;
+    max-width: 1200px;
+    height: auto; /* Cambia a auto o a un valor fijo que contenga todo sin scroll */
+    overflow-y: hidden; /* Asegura que no haya scroll vertical */
+    overflow-x: hidden;
+}
+
+.modal-firma-amplio .modal-content {
+    width: 1200px;
+    height: auto; /* Cambia a auto o a un valor fijo que contenga todo */
+}
+
+.modal-firma-amplio .modal-body {
+    width: 1200px;
+    height: auto; /* Ajusta según sea necesario para el iframe, o déjalo en auto */
+}
+
+/* Opcional: Si el iframe necesita ser más grande */
+.modal-firma-amplio iframe {
+    width: 1000px; /* Ejemplo */
+    height: 500px; /* Ejemplo */
+}
+
+.modal-header .close {
+    margin-left: 30px;  
+    color: #fff;  
+    opacity: 1; /* Asegura que no tenga transparencia y se vea completamente */
+    font-size: 2.5rem; /* Aumenta el tamaño de la "X" */
+  
+}
+

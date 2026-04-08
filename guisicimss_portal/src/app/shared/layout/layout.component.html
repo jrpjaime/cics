@@ -1,0 +1,22 @@
+
+
+<app-sidebar></app-sidebar>
+<div class="page-body-container" [class.menu-collapsed]="isMenuCollapsed">
+
+  <!-- 1.  menú lateral  -->
+  <app-left-menu (toggleMenuClicked)="toggleMenu()"></app-left-menu>
+
+  <!-- 2.  área de contenido t -->
+  <div class="main-content-area">
+  <main role="main" class="container-fluid">
+
+    <alert></alert>
+    <app-loader></app-loader>
+ 
+
+    <router-outlet />
+
+  </main>
+  </div>
+
+</div>

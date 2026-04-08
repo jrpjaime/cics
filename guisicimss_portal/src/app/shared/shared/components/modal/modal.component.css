@@ -1,0 +1,89 @@
+.modal-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.6); /* Un poco más oscuro para que se note */
+  
+ 
+  z-index: 1040; 
+}
+
+.modal-container {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  
+   
+  z-index: 1050;
+
+  width: 90%;
+  max-width: 500px;
+  /* ... otros estilos como padding, etc. ... */
+}
+
+.modal-header {
+  text-align: center;
+  flex-direction: column; /* Apila el icono y el título */
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.icon-container {
+  margin-bottom: 1rem;
+  line-height: 1;
+}
+
+.icon-container svg {
+  width: 48px;
+  height: 48px;
+}
+
+.modal-body {
+  text-align: center;
+  padding: 1rem 2rem;
+}
+
+.modal-footer {
+  justify-content: center; /* Centra los botones */
+  border-top: none;
+  padding-top: 0;
+}
+
+ 
+ 
+
+ .close-button {
+  /* --- Posicionamiento --- */
+  position: absolute; /* Lo saca del flujo normal para posicionarlo libremente */
+  top: 10px;          /* Distancia desde el borde superior del header */
+  right: 15px;         /* Distancia desde el borde derecho del header */
+  z-index: 10;         /* Se asegura de que esté por encima de cualquier otro elemento del header */
+
+  /* --- Estilo y Apariencia --- */
+  background: transparent; /* Sin fondo */
+  border: none;            /* Sin borde */
+  font-size: 1.75rem;      /* Un tamaño grande y fácil de pulsar */
+  font-weight: bold;       /* Una 'X' más gruesa */
+  line-height: 1;          /* Ayuda a alinear verticalmente el texto */
+  color: #ffffff;          /* Color blanco para que contraste con el fondo oscuro */
+  opacity: 0.7;            /* Un poco transparente para no ser tan agresivo visualmente */
+  cursor: pointer;         /* Muestra una mano al pasar el ratón por encima */
+  padding: 0;              /* Elimina cualquier espaciado por defecto del botón */
+}
+
+/* --- Interacción --- */
+.close-button:hover {
+  opacity: 1; /* Se vuelve completamente opaco al pasar el ratón */
+}
+
+/* Opcional pero recomendado para accesibilidad */
+.close-button:focus {
+  outline: none; /* Elimina el feo borde azul por defecto */
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5); /* Añade un "resplandor" sutil cuando se navega con el teclado */
+}

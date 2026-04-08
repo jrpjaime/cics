@@ -1,0 +1,145 @@
+<div class="container mt-4 mb-5 pb-5">
+
+  <div class="row">
+    <div class="col-md-12">
+      <h2 class="mb-0">{{ isEditMode ? 'Editar Identidad CICS' : 'Registro de Nueva Identidad' }}</h2>
+      <hr class="red">
+    </div>
+  </div>
+
+  @if (isEditMode) {
+  <div class="row mb-4">
+    <div class="col-md-12">
+      <div class="alert" [ngClass]="usuario.indActivo === 1 ? 'alert-info' : 'alert-danger'">
+        <div class="row">
+          <div class="col-md-9">
+            <p><strong>Estado de la cuenta:</strong> {{ usuario.indActivo === 1 ? 'ACTIVA' : 'DESACTIVADA' }}</p>
+          </div>
+          <div class="col-md-3 text-right">
+            <button type="button" class="btn btn-sm"
+                    [ngClass]="usuario.indActivo === 1 ? 'btn-danger' : 'btn-success'"
+                    (click)="toggleEstadoUsuario()">
+              {{ usuario.indActivo === 1 ? 'Desactivar Usuario' : 'Habilitar Usuario' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  }
+
+  <div class="card p-4 shadow-sm" style="background: #fff; border: 1px solid #ddd;">
+
+    <h4 class="border-bottom pb-2 mb-4">Acceso al Sistema (API/Portal)</h4>
+    <div class="row">
+      <!-- ROL DEL SISTEMA PRIMERO -->
+      <div class="col-md-4 form-group">
+        <label class="control-label">Rol del Sistema*</label>
+        <select class="form-control" [(ngModel)]="usuario.cveRol" (change)="onRolChange()">
+          <option value="" disabled selected>-- Seleccione --</option>
+          <option value="CLIENTE">CLIENTE (Ejecuta CICS)</option>
+          <option value="ADMIN">ADMIN (Administrador)</option>
+        </select>
+      </div>
+
+      <div class="col-md-4 form-group">
+        <label class="control-label">Usuario API (Login)*</label>
+        <input type="text" class="form-control" [(ngModel)]="usuario.cveUsuarioApi"
+               (ngModelChange)="registrarCambio()" [disabled]="isEditMode" autocomplete="off">
+      </div>
+
+      <div class="col-md-4 form-group">
+        <label class="control-label">
+            {{ isEditMode ? 'Cambiar Contraseña (Opcional)' : 'Password API*' }}
+        </label>
+        <input type="password" class="form-control" [(ngModel)]="usuario.desPasswordApi"
+               (ngModelChange)="registrarCambio()" autocomplete="new-password" placeholder="********">
+      </div>
+    </div>
+
+    <!-- SECCIÓN MAINFRAME USANDO @if -->
+    @if (usuario.cveRol === 'CLIENTE') {
+    <div class="mt-4 animate__animated animate__fadeIn">
+      <h4 class="border-bottom pb-2 mb-4">Credenciales de Mainframe (RACF)</h4>
+      <div class="row">
+        <div class="col-md-6 form-group">
+          <label class="control-label">Usuario RACF*</label>
+          <input type="text" class="form-control text-uppercase" [(ngModel)]="usuario.cveUsuarioMainframe"
+                 (ngModelChange)="registrarCambio()" maxlength="8" autocomplete="off">
+        </div>
+        <div class="col-md-6 form-group">
+          <label class="control-label">
+            {{ isEditMode ? 'Password RACF (Opcional)' : 'Password RACF*' }}
+          </label>
+          <input type="password" class="form-control" [(ngModel)]="usuario.desPasswordMainframe"
+                 (ngModelChange)="registrarCambio()" maxlength="8" autocomplete="new-password" placeholder="********">
+        </div>
+      </div>
+
+      <div class="row mt-4 mb-2 align-items-center">
+        <div class="col-sm-6">
+          <h4 class="mb-0">Programas Autorizados*</h4>
+        </div>
+        <div class="col-sm-6 text-right">
+          <button type="button" class="btn btn-primary btn-sm" (click)="agregarFilaPermiso()">
+            Agregar Programa
+          </button>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-striped border align-middle">
+          <thead class="bg-dark text-white">
+            <tr>
+              <th>Programa*</th>
+              <th>Transacción*</th>
+              <th>Timeout (seg)</th>
+              <th class="text-center">Estado</th>
+              <th class="text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (p of usuario.permisos; track $index) {
+            <tr>
+              <td><input type="text" class="form-control input-sm text-uppercase" [(ngModel)]="p.nomPrograma"
+                         (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0" maxlength="8"></td>
+              <td><input type="text" class="form-control input-sm text-uppercase" [(ngModel)]="p.nomTransaccion"
+                         (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0" maxlength="4"></td>
+              <td><input type="number" class="form-control input-sm" [(ngModel)]="p.numTimeoutSec"
+                         (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0"></td>
+              <td class="text-center">
+                <span class="label" [ngClass]="p.indActivo === 1 ? 'label-success' : 'label-danger'">
+                  {{ p.indActivo === 1 ? 'ACTIVO' : 'BAJA' }}
+                </span>
+              </td>
+              <td class="text-center">
+                <button type="button" class="btn btn-link text-danger" (click)="eliminarODesactivarPermiso($index)">
+                  <span class="bi" [ngClass]="p.indActivo === 1 ? 'bi-trash-fill' : 'bi-arrow-counterclockwise'"></span>
+                </button>
+              </td>
+            </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+    }
+
+    <!-- BOTONES FINALES -->
+    <div class="row mt-5">
+      <div class="col-md-12 text-right">
+
+
+        <hr>
+        <button type="button" class="btn btn-default mr-2" (click)="regresar()">Cancelar</button>
+        <button type="button" class="btn shadow-sm"
+                [ngClass]="cambiosRealizados ? 'btn-primary' : 'btn-default'"
+                [disabled]="!cambiosRealizados"
+                (click)="guardar()">
+          {{ isEditMode ? 'Guardar Cambios' : 'Registrar Usuario' }}
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>

@@ -1,0 +1,6 @@
+    /* Ajusta el padding-top para evitar que el contenido quede tapado por el header */
+    body {
+      padding-top: 210px; /* Ajusta este valor según la altura real del header */
+    }
+
+

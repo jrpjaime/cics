@@ -1,0 +1,55 @@
+<nav class="side-menu">
+ 
+
+  <ul class="nav-list">
+    @for (item of menuItems; track item.name) {
+      <!-- Agregamos clase para diferenciar niveles -->
+      <li [class.has-submenu]="item.children" [class.expanded]="item.isExpanded">
+
+        <!-- Añadimos title para accesibilidad cuando está colapsado -->
+        <a [routerLink]="item.disabled ? null : item.route" 
+           (click)="onItemClick($event, item)" 
+           routerLinkActive="active-link" 
+           [routerLinkActiveOptions]="{exact: !item.children}"
+           [title]="item.name" 
+           [ngClass]="{'menu-item-disabled': item.disabled}">
+           
+          <i class="menu-icon" [class]="item.icon"></i>
+          <span class="menu-text">{{ item.name }}</span>
+
+          @if (item.children) {
+            <!-- Flecha más pequeña y sutil (chevron) -->
+            <svg class="submenu-arrow" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor">
+              <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+            </svg>
+          }
+        </a>
+
+        @if (item.children && item.isExpanded) {
+          <ul class="submenu">
+            @for (child of item.children; track child.name) {
+              <li>
+                <a [routerLink]="child.disabled ? null : child.route" 
+                   (click)="onItemClick($event, child)" 
+                   routerLinkActive="active-link"
+                   [ngClass]="{'menu-item-disabled': child.disabled}"
+                   class="position-relative"> 
+                  
+                  <span class="menu-text">{{ child.name }}</span>
+                </a>
+              </li>
+            }
+          </ul>
+        }
+      </li>
+    }
+  </ul>
+
+  <div class="menu-toggle-container">
+    <button class="toggle-button" (click)="onToggleMenu()" title="Alternar menú">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <polyline points="15 18 9 12 15 6"></polyline>
+      </svg>
+    </button>
+  </div>
+</nav>
