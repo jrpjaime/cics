@@ -2,7 +2,6 @@ package mx.gob.imss.cics.service;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -15,12 +14,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.springframework.stereotype.Component;
-
 @Service
 public class UsuarioAdminService {
-
- 
 
     private static final Logger logger = LogManager.getLogger(UsuarioAdminService.class);
 
@@ -32,6 +27,7 @@ public class UsuarioAdminService {
 
     /**
      * Lista usuarios aplicando filtros dinámicos y paginación para Oracle 11g.
+     * Incluye los nuevos campos de nombre en el resultado de la tabla.
      */
     public Map<String, Object> listarUsuariosPaginados(int page, int size, String userApi, String userMain, String rol) {
         StringBuilder sqlWhere = new StringBuilder(" WHERE 1=1 ");
@@ -51,7 +47,6 @@ public class UsuarioAdminService {
         }
 
         String sqlCount = "SELECT COUNT(*) FROM MSCC_USUARIO_CICS " + sqlWhere;
-        //Integer totalElements = jdbcTemplate.queryForObject(sqlCount, Integer.class, params.toArray());
         Long totalElements = jdbcTemplate.queryForObject(sqlCount, Long.class, params.toArray());
 
         int startRow = (page * size) + 1;
@@ -59,8 +54,9 @@ public class UsuarioAdminService {
         params.add(endRow);
         params.add(startRow);
 
+        // Agregamos NOM_NOMBRE y NOM_APELLIDO_1 para que se vean en la lista principal
         String sqlPaged = "SELECT * FROM ( SELECT a.*, ROWNUM rnum FROM ( " +
-                          "SELECT ID_USUARIO_CICS, CVE_USUARIO_API, CVE_USUARIO_MAINFRAME, CVE_ROL, IND_ACTIVO " +
+                          "SELECT ID_USUARIO_CICS, CVE_USUARIO_API, CVE_USUARIO_MAINFRAME, CVE_ROL, IND_ACTIVO, NOM_NOMBRE, NOM_APELLIDO_1 " +
                           "FROM MSCC_USUARIO_CICS " + sqlWhere + " ORDER BY ID_USUARIO_CICS DESC " +
                           ") a WHERE ROWNUM <= ? ) WHERE rnum >= ?";
 
@@ -77,16 +73,15 @@ public class UsuarioAdminService {
     }
 
     /**
-     * Obtiene la información de un usuario y todos sus programas autorizados.
+     * Obtiene la información completa de una identidad y sus programas activos.
      */
-    public Map<String, Object> obtenerDetalleUsuario(Long id) {
-        String sqlUser = "SELECT ID_USUARIO_CICS, CVE_USUARIO_API, CVE_USUARIO_MAINFRAME, CVE_ROL, IND_ACTIVO " +
-                         "FROM MSCC_USUARIO_CICS WHERE ID_USUARIO_CICS = ?";
+    public Map<String, Object> obtenerUsuarioDetalle(Long id) {
+        // SELECT * asegura traer todos los campos nuevos (contacto, propóstio, etc)
+        String sqlUser = "SELECT * FROM MSCC_USUARIO_CICS WHERE ID_USUARIO_CICS = ?";
         Map<String, Object> user = jdbcTemplate.queryForMap(sqlUser, id);
 
-        // Solo traemos permisos que no han sido dados de baja (STP_BAJA is null)
-        String sqlPermisos = "SELECT ID_PERMISO_CICS, NOM_PROGRAMA, NOM_TRANSACCION, NUM_TIMEOUT_SEC, IND_ACTIVO " +
-                             "FROM MSCC_PERMISO_CICS WHERE ID_USUARIO_CICS = ? AND STP_BAJA IS NULL";
+        // Traemos todos los campos de permisos, incluyendo las nuevas fechas de auditoría
+        String sqlPermisos = "SELECT * FROM MSCC_PERMISO_CICS WHERE ID_USUARIO_CICS = ? AND STP_BAJA IS NULL";
         List<Map<String, Object>> permisos = jdbcTemplate.queryForList(sqlPermisos, id);
 
         user.put("permisos", permisos);
@@ -94,13 +89,14 @@ public class UsuarioAdminService {
     }
 
     /**
-     * Registra un nuevo mapeo de identidad. Si es CLIENTE, guarda sus programas.
+     * Registra un nuevo mapeo de identidad con todos los campos de contacto y auditoría.
      */
-     @Transactional
+    @Transactional
     public void registrarUsuario(Map<String, Object> datos) {
-        logger.info("Iniciando registro de usuario con datos: {}", datos);
+        logger.info("Iniciando registro de usuario con datos completos: {}", datos);
         
         try {
+            // Extracción segura de datos
             String userApi = Optional.ofNullable(datos.get("cveUsuarioApi")).map(Object::toString).orElse("").trim();
             String passRaw = Optional.ofNullable(datos.get("desPasswordApi")).map(Object::toString).orElse("");
             String rol = Optional.ofNullable(datos.get("cveRol")).map(Object::toString).orElse("CLIENTE");
@@ -116,112 +112,112 @@ public class UsuarioAdminService {
                 throw new RuntimeException("El usuario '" + userApi + "' ya está registrado.");
             }
 
-            // 2. Obtener ID único para Oracle
+            // 2. Obtener ID de la secuencia Oracle
             Long idUsuario = jdbcTemplate.queryForObject("SELECT MSCS_USUARIO_CICS.NEXTVAL FROM DUAL", Long.class);
-            logger.info("Generado ID de Oracle: {}", idUsuario);
+            logger.info("ID Generado para nueva identidad: {}", idUsuario);
 
-            // 3. Encriptar Password (BCrypt genera 60 caracteres, asegura que tu columna sea VARCHAR2(100))
-            String passHash = passwordEncoder.encode(passRaw);
-
+            // 3. Preparar datos de Mainframe si aplica
             String userMain = "CLIENTE".equals(rol) ? Optional.ofNullable(datos.get("cveUsuarioMainframe")).map(o -> o.toString().toUpperCase()).orElse(null) : null;
             String passMain = "CLIENTE".equals(rol) ? Optional.ofNullable(datos.get("desPasswordMainframe")).map(Object::toString).orElse(null) : null;
 
-            // 4. Insertar Maestro
+            // 4. Insertar Registro Maestro con todos los nuevos campos
             String sqlUser = "INSERT INTO MSCC_USUARIO_CICS (ID_USUARIO_CICS, CVE_USUARIO_API, DES_PASSWORD_API, " +
-                            "CVE_USUARIO_MAINFRAME, DES_PASSWORD_MAINFRAME, CVE_ROL, IND_ACTIVO) " +
-                            "VALUES (?, ?, ?, ?, ?, ?, 1)";
+                            "NOM_NOMBRE, NOM_APELLIDO_1, NOM_APELLIDO_2, DES_USO_CUENTA, DES_CORREO, NUM_TELEFONO, " +
+                            "NUM_EXTENSION, CVE_ROL, CVE_USUARIO_MAINFRAME, DES_PASSWORD_MAINFRAME, IND_ACTIVO, " +
+                            "STP_REGISTRO, STP_ACTUALIZACION) " +
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)";
             
-            jdbcTemplate.update(sqlUser, idUsuario, userApi, passHash, userMain, passMain, rol);
-            logger.info("Insertado registro maestro para ID: {}", idUsuario);
+            jdbcTemplate.update(sqlUser, 
+                idUsuario, 
+                userApi, 
+                passwordEncoder.encode(passRaw),
+                datos.get("nomNombre"), 
+                datos.get("nomApellido1"), 
+                datos.get("nomApellido2"),
+                datos.get("desUsoCuenta"), 
+                datos.get("desCorreo"), 
+                datos.get("numTelefono"), 
+                datos.get("numExtension"),
+                rol, 
+                userMain, 
+                passMain);
 
-            // 5. Procesar Permisos
-            if ("CLIENTE".equals(rol) && datos.get("permisos") != null) {
+            // 5. Procesar Permisos vinculados
+            if (datos.get("permisos") != null) {
                 List<Map<String, Object>> permisos = (List<Map<String, Object>>) datos.get("permisos");
                 for (Map<String, Object> p : permisos) {
-                    // Solo insertar si tiene datos de programa
                     if (p.get("nomPrograma") != null && !p.get("nomPrograma").toString().isEmpty()) {
                         p.put("idUsuarioCics", idUsuario);
                         insertarPermiso(p);
                     }
                 }
             }
+            logger.info("Identidad {} registrada exitosamente.", userApi);
         } catch (Exception e) {
-            logger.error("ERROR CRÍTICO en registrarUsuario: {}", e.getMessage(), e);
-            throw e; // Lanza para que el Controller lo cachee y haga Rollback
+            logger.error("Fallo al registrar usuario: {}", e.getMessage(), e);
+            throw e; 
         }
-    }
-
-    private void insertarPermiso(Map<String, Object> p) {
-        String sql = "INSERT INTO MSCC_PERMISO_CICS (ID_PERMISO_CICS, ID_USUARIO_CICS, NOM_PROGRAMA, " + 
-                    "NOM_TRANSACCION, NUM_TIMEOUT_SEC, IND_ACTIVO) " +
-                    "VALUES (MSCS_PERMISO_CICS.NEXTVAL, ?, ?, ?, ?, 1)";
-        
-        // Manejo seguro del timeout (Angular envía números, pero Jackson puede verlos como Integer o Double)
-        Object timeoutObj = p.get("numTimeoutSec");
-        int timeout = 30; // default
-        if (timeoutObj instanceof Number) {
-            timeout = ((Number) timeoutObj).intValue();
-        }
-
-        String prog = p.get("nomPrograma").toString().trim().toUpperCase();
-        String trans = p.get("nomTransaccion") != null ? p.get("nomTransaccion").toString().trim().toUpperCase() : "";
-
-        jdbcTemplate.update(sql, p.get("idUsuarioCics"), prog, trans, timeout);
-        logger.debug("Insertado permiso: {}/{} para usuario: {}", prog, trans, p.get("idUsuarioCics"));
     }
 
     /**
-     * Actualiza la identidad y gestiona la tabla de permisos (Altas y Bajas con STP_BAJA).
+     * Actualiza los datos de la identidad, manejando cambios en password y auditoría.
      */
     @Transactional
     public void actualizarUsuario(Map<String, Object> datos) {
+        logger.info("Actualizando identidad ID: {}", datos.get("idUsuarioCics"));
+        
         Long idUser = Long.valueOf(datos.get("idUsuarioCics").toString());
         String rol = datos.get("cveRol").toString();
         Integer indActivo = Integer.valueOf(datos.get("indActivo").toString());
 
-        // Extraemos campos de Mainframe
-        String userMain = datos.get("cveUsuarioMainframe") != null ? datos.get("cveUsuarioMainframe").toString().toUpperCase() : null;
-        String passMain = datos.get("desPasswordMainframe") != null ? datos.get("desPasswordMainframe").toString() : null;
-
-        // Lógica para el Password del API (solo se actualiza si enviaron uno nuevo)
+        // Lógica de Password del Portal (solo si se tecleó uno nuevo)
         String passApiRaw = datos.get("desPasswordApi") != null ? datos.get("desPasswordApi").toString() : "";
-        
         if (!passApiRaw.trim().isEmpty()) {
-            // El usuario quiere cambiar su contraseña del portal
             String passApiHash = passwordEncoder.encode(passApiRaw);
-            String sqlUpdPass = "UPDATE MSCC_USUARIO_CICS SET DES_PASSWORD_API = ? WHERE ID_USUARIO_CICS = ?";
-            jdbcTemplate.update(sqlUpdPass, passApiHash, idUser);
+            jdbcTemplate.update("UPDATE MSCC_USUARIO_CICS SET DES_PASSWORD_API = ? WHERE ID_USUARIO_CICS = ?", 
+                passApiHash, idUser);
         }
 
-        // Actualización de datos generales
+        // Actualización de Campos Maestros con STP_ACTUALIZACION
         String sqlUpd = "UPDATE MSCC_USUARIO_CICS SET " +
-                        "CVE_USUARIO_MAINFRAME = ?, " +
-                        "DES_PASSWORD_MAINFRAME = ?, " +
-                        "CVE_ROL = ?, " +
-                        "IND_ACTIVO = ?, " +
-                        "STP_ACTUALIZACION = CURRENT_TIMESTAMP " +
+                        "NOM_NOMBRE = ?, NOM_APELLIDO_1 = ?, NOM_APELLIDO_2 = ?, " +
+                        "DES_USO_CUENTA = ?, DES_CORREO = ?, NUM_TELEFONO = ?, NUM_EXTENSION = ?, " +
+                        "CVE_USUARIO_MAINFRAME = ?, DES_PASSWORD_MAINFRAME = ?, " +
+                        "CVE_ROL = ?, IND_ACTIVO = ?, STP_ACTUALIZACION = CURRENT_TIMESTAMP " +
                         "WHERE ID_USUARIO_CICS = ?";
         
-        jdbcTemplate.update(sqlUpd, userMain, passMain, rol, indActivo, idUser);
+        jdbcTemplate.update(sqlUpd, 
+            datos.get("nomNombre"), 
+            datos.get("nomApellido1"), 
+            datos.get("nomApellido2"),
+            datos.get("desUsoCuenta"), 
+            datos.get("desCorreo"), 
+            datos.get("numTelefono"), 
+            datos.get("numExtension"),
+            datos.get("cveUsuarioMainframe") != null ? datos.get("cveUsuarioMainframe").toString().toUpperCase() : null,
+            datos.get("desPasswordMainframe"), 
+            rol, 
+            indActivo, 
+            idUser);
 
-        // Gestión de Permisos (Programas)
+        // Gestión de la tabla de Permisos (Altas y Bajas lógicas)
         if (datos.containsKey("permisos")) {
             List<Map<String, Object>> permisos = (List<Map<String, Object>>) datos.get("permisos");
             for (Map<String, Object> p : permisos) {
                 if (p.get("idPermisoCics") == null) {
-                    // Es un programa nuevo agregado en la pantalla de edición
+                    // Es un programa nuevo añadido en edición
                     p.put("idUsuarioCics", idUser);
                     insertarPermiso(p);
                 } else {
-                    // Es un permiso existente, actualizamos su estado o datos
                     int statusPermiso = Integer.parseInt(p.get("indActivo").toString());
                     if (statusPermiso == 0) {
-                        // Si se marcó para borrar
-                        jdbcTemplate.update("UPDATE MSCC_PERMISO_CICS SET IND_ACTIVO = 0, STP_BAJA = CURRENT_TIMESTAMP WHERE ID_PERMISO_CICS = ?", 
+                        // Se marcó para eliminar: Actualizamos estado y ponemos fecha de BAJA
+                        jdbcTemplate.update("UPDATE MSCC_PERMISO_CICS SET IND_ACTIVO = 0, STP_BAJA = CURRENT_TIMESTAMP, STP_ACTUALIZACION = CURRENT_TIMESTAMP WHERE ID_PERMISO_CICS = ?", 
                             p.get("idPermisoCics"));
                     } else {
-                        // Actualización de timeout o nombres por si cambiaron
-                        String sqlUpdPerm = "UPDATE MSCC_PERMISO_CICS SET NOM_PROGRAMA = ?, NOM_TRANSACCION = ?, NUM_TIMEOUT_SEC = ? WHERE ID_PERMISO_CICS = ?";
+                        // Se modificó (ej: cambio de timeout): Actualizamos y refrescamos STP_ACTUALIZACION
+                        String sqlUpdPerm = "UPDATE MSCC_PERMISO_CICS SET NOM_PROGRAMA = ?, NOM_TRANSACCION = ?, " +
+                                            "NUM_TIMEOUT_SEC = ?, STP_ACTUALIZACION = CURRENT_TIMESTAMP WHERE ID_PERMISO_CICS = ?";
                         jdbcTemplate.update(sqlUpdPerm, 
                             p.get("nomPrograma").toString().toUpperCase(), 
                             p.get("nomTransaccion").toString().toUpperCase(), 
@@ -232,20 +228,22 @@ public class UsuarioAdminService {
             }
         }
     }
-    
 
+    /**
+     * Inserta un registro de permiso con marcas de tiempo iniciales.
+     */
+    private void insertarPermiso(Map<String, Object> p) {
+        String sql = "INSERT INTO MSCC_PERMISO_CICS (ID_PERMISO_CICS, ID_USUARIO_CICS, NOM_PROGRAMA, " + 
+                    "NOM_TRANSACCION, NUM_TIMEOUT_SEC, IND_ACTIVO, STP_REGISTRO, STP_ACTUALIZACION) " +
+                    "VALUES (MSCS_PERMISO_CICS.NEXTVAL, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)";
+        
+        Object timeoutObj = p.get("numTimeoutSec");
+        int timeout = (timeoutObj instanceof Number) ? ((Number) timeoutObj).intValue() : 30;
 
-    public Map<String, Object> obtenerUsuarioDetalle(Long id) { // <--- Nombre corregido
-    String sqlUser = "SELECT ID_USUARIO_CICS, CVE_USUARIO_API, CVE_USUARIO_MAINFRAME, CVE_ROL, IND_ACTIVO " +
-                     "FROM MSCC_USUARIO_CICS WHERE ID_USUARIO_CICS = ?";
-    Map<String, Object> user = jdbcTemplate.queryForMap(sqlUser, id);
-
-    // Solo traemos permisos que no han sido dados de baja (STP_BAJA is null)
-    String sqlPermisos = "SELECT ID_PERMISO_CICS, NOM_PROGRAMA, NOM_TRANSACCION, NUM_TIMEOUT_SEC, IND_ACTIVO " +
-                         "FROM MSCC_PERMISO_CICS WHERE ID_USUARIO_CICS = ? AND STP_BAJA IS NULL";
-    List<Map<String, Object>> permisos = jdbcTemplate.queryForList(sqlPermisos, id);
-
-    user.put("permisos", permisos);
-    return user;
-}
+        jdbcTemplate.update(sql, 
+            p.get("idUsuarioCics"), 
+            p.get("nomPrograma").toString().trim().toUpperCase(), 
+            p.get("nomTransaccion").toString().trim().toUpperCase(), 
+            timeout);
+    }
 }
