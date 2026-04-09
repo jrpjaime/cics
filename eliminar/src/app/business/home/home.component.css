@@ -1,0 +1,31 @@
+.avatar-circle {
+  width: 70px;
+  height: 70px;
+  background-color: #f0f2f5;
+  color: #691C32; /* Guinda */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  font-weight: 700;
+  border: 3px solid #691C32;
+}
+
+.welcome-text {
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.user-name {
+  color: #333;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+.lead {
+    font-size: 1.25rem;
+    font-weight: 300;
+    color: #13322B; /* Verde Institucional */
+}

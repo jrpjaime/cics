@@ -1,0 +1,121 @@
+<div class="container-fluid mt-3">
+
+  <!-- TÍTULO SEGÚN ESTÁNDAR CIT-DAT -->
+  <div class="row">
+    <div class="col-md-12">
+      <h2 class="mb-0">Gestión de Usuarios CICS</h2>
+      <hr class="red">
+    </div>
+  </div>
+
+  <!-- SECCIÓN DE FILTROS NATIVA -->
+  <div class="row mb-4">
+    <div class="col-md-3 form-group">
+      <label class="control-label">Usuario API (Login)</label>
+      <input type="text" [(ngModel)]="filtros.userApi" class="form-control" placeholder="Clave de usuario...">
+    </div>
+
+    <div class="col-md-3 form-group">
+      <label class="control-label">User Mainframe</label>
+      <input type="text" [(ngModel)]="filtros.userMain" class="form-control" placeholder="Cuenta RACF...">
+    </div>
+
+    <div class="col-md-2 form-group">
+      <label class="control-label">Rol Sistema</label>
+      <select [(ngModel)]="filtros.rol" class="form-control">
+        <option value="">TODOS</option>
+        <option value="ADMIN">ADMIN</option>
+        <option value="CLIENTE">CLIENTE</option>
+      </select>
+    </div>
+
+    <div class="col-md-4 text-right">
+      <br> <!-- Espaciador para alinear botones con inputs -->
+      <button type="button" (click)="limpiarFiltros()" class="btn btn-default mr-2">
+        Limpiar
+      </button>
+      <button type="button" (click)="cargarUsuarios(0)" class="btn btn-primary mr-2">
+        Buscar
+      </button>
+      <button type="button" (click)="irANuevo()" class="btn btn-primary">
+        Registrar Usuario
+      </button>
+    </div>
+  </div>
+
+  <!-- TABLA DE RESULTADOS NATIVA -->
+  <div class="row">
+    <div class="col-md-12">
+      <div class="table-responsive">
+        <table class="table table-striped table-bordered table-hover">
+          <thead>
+            <tr>
+              <th>Usuario API (Login)</th>
+              <th>Responsable de la Cuenta</th> <!-- NUEVA COLUMNA -->
+              <th>Cuenta Mainframe</th>
+              <th>Perfil</th>
+              <th class="text-center">Estatus</th>
+              <th class="text-center">Acción</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (u of usuarios; track u.ID_USUARIO_CICS) {
+              <tr>
+                <td><strong>{{ u.CVE_USUARIO_API }}</strong></td>
+                
+                <!-- MOSTRAR NOMBRE Y APELLIDO DEL RESPONSABLE -->
+                <td>
+                    {{ u.NOM_NOMBRE }} {{ u.NOM_APELLIDO_1 }}
+                </td>
+
+                <td>
+                  @if (u.CVE_USUARIO_MAINFRAME) {
+                    <code>{{ u.CVE_USUARIO_MAINFRAME }}</code>
+                  } @else {
+                    <span class="text-muted small">N/A</span>
+                  }
+                </td>
+                <td>
+                  <span class="label" [ngClass]="u.CVE_ROL === 'ADMIN' ? 'label-danger' : 'label-info'">
+                      {{ u.CVE_ROL }}
+                  </span>
+                </td>
+                <td class="text-center">
+                  @if (u.IND_ACTIVO == 1) {
+                    <span class="text-success small"><strong>Activo</strong></span>
+                  } @else {
+                    <span class="text-muted small">Inactivo</span>
+                  }
+                </td>
+                <td class="text-center">
+                  <button type="button" class="btn btn-sm btn-link" (click)="irAEditar(u.ID_USUARIO_CICS)">
+                    Editar / Permisos
+                  </button>
+                </td>
+              </tr>
+            }
+
+            @if (usuarios.length === 0) {
+              <tr>
+                <td colspan="6" class="text-center py-5">
+                    No se encontraron usuarios registrados con los criterios seleccionados.
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- PAGINADOR NATIVO -->
+  <div class="row mt-4 mb-5">
+    <div class="col-md-12">
+      <app-paginatorui-component
+        [instanciaPaginador]="paginador"
+        (cambioDePagina)="cargarUsuarios($event)">
+      </app-paginatorui-component>
+    </div>
+  </div>
+
+</div>
