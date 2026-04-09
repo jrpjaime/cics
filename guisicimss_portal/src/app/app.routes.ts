@@ -54,14 +54,10 @@ export const routes: Routes = [
         loadComponent: () => import('./business/admin/permisos-admin/permisos-admin.component')
           .then(m => m.PermisosAdminComponent)
       },
-
-      // --- MÓDULO OPERATIVO ---
-
-      // Consola de Ejecución CICS (Envío de cadenas y visualización de JSON)
       {
-        path: 'cics/consola',
-        loadComponent: () => import('./business/cics/consola-cics/consola-cics.component')
-          .then(m => m.ConsolaCicsComponent)
+        path: 'admin/dashboard',
+        loadComponent: () => import('./business/cics/monitoreo/monitoreo-dashboard/monitoreo-dashboard.component')
+          .then(m => m.MonitoreoDashboardComponent)
       },
 
       // Redirección por defecto si la ruta está vacía

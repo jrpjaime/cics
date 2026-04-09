@@ -7,13 +7,11 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
-
 import java.util.Map;
 
 @RestController
 @RequestMapping("/mssicimss-integrationhub/v1/admin")
 @PreAuthorize("hasRole('ADMIN')")
-
 public class UsuarioAdminController {
 
     @Autowired
@@ -29,13 +27,11 @@ public class UsuarioAdminController {
         return ResponseEntity.ok(adminService.listarUsuariosPaginados(page, size, userApi, userMain, rol));
     }
 
-    // RUTA PARA DETALLE POR ID (POST para ofuscar el ID en la URL)
     @PostMapping("/usuarios/detalle")  
     public ResponseEntity<?> obtenerDetalle(@RequestBody Map<String, Long> payload) {
         try {
             Long id = payload.get("idUsuarioCics");
             if (id == null) return ResponseEntity.badRequest().body(Map.of("message", "ID requerido"));
-            
             return ResponseEntity.ok(adminService.obtenerUsuarioDetalle(id));
         } catch (Exception e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).body(Map.of("message", "No encontrado"));
@@ -48,12 +44,11 @@ public class UsuarioAdminController {
             adminService.registrarUsuario(datos);
             return ResponseEntity.ok(Map.of("message", "Usuario registrado exitosamente."));
         } catch (Exception e) {
-            e.printStackTrace(); // Ver el error real en la consola de tu IDE (Eclipse/IntelliJ)
+            e.printStackTrace(); 
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-                                .body(Map.of("message", "Error: " + e.getMessage())); // Enviar el mensaje real al front
+                                .body(Map.of("message", e.getMessage())); 
         }
     }
-
 
     @PutMapping("/usuarios")
     public ResponseEntity<?> actualizar(@RequestBody Map<String, Object> datos) {
@@ -61,9 +56,9 @@ public class UsuarioAdminController {
             adminService.actualizarUsuario(datos);
             return ResponseEntity.ok(Map.of("message", "Usuario actualizado correctamente."));
         } catch (Exception e) {
-            e.printStackTrace(); // Ver en consola de Java
+            e.printStackTrace();
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                                .body(Map.of("message", "Error al actualizar: " + e.getMessage()));
+                                .body(Map.of("message", e.getMessage()));
         }
     }
 }

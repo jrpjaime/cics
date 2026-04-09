@@ -41,14 +41,9 @@ export class LeftMenuComponent implements OnInit, OnDestroy {
       roles: ['ADMIN'], // Solo visible si el JWT trae el rol ADMIN
       children: [
         {
-          name: 'Usuarios y Mapeo',
+          name: 'Usuarios',
           icon: 'bi bi-people',
           route: '/admin/usuarios'
-        },
-        {
-          name: 'Permisos de Programas',
-          icon: 'bi bi-key',
-          route: '/admin/permisos'
         }
       ]
     },
@@ -58,7 +53,8 @@ export class LeftMenuComponent implements OnInit, OnDestroy {
       isExpanded: false, // Por defecto, este menú puede estar colapsado
       roles: ['ADMIN'], // Solo visible si el JWT trae el rol ADMIN
       children: [
-        { name: 'Log de Auditoría', icon: 'bi bi-list-columns', route: '/admin/auditoria' }
+        { name: 'Log de Auditoría', icon: 'bi bi-list-columns', route: '/admin/auditoria' },
+        { name: 'Dashboard', icon: 'bi bi-graph-up-arrow', route: '/admin/dashboard' }
       ]
     }
   ];

@@ -2,7 +2,7 @@
 
   <div class="row">
     <div class="col-md-12">
-      <h2 class="mb-0">{{ isEditMode ? 'Editar Identidad CICS' : 'Registro de Nueva Identidad' }}</h2>
+      <h2 class="mb-0">{{ isEditMode ? 'Editar Usuario CICS' : 'Registro de Nuevo Usuario' }}</h2>
       <hr class="red">
     </div>
   </div>
@@ -13,8 +13,11 @@
       <div class="alert" [ngClass]="usuario.indActivo === 1 ? 'alert-info' : 'alert-danger'">
         <div class="row align-items-center">
           <div class="col-md-9">
-            <p class="mb-0"><strong>Estado de la cuenta:</strong> {{ usuario.indActivo === 1 ? 'ACTIVA' : 'DESACTIVADA' }}</p>
-            <small class="text-muted">Registrado el: {{ usuario.stpRegistro }} | Última actualización: {{ usuario.stpActualizacion }}</small>
+            <p class="mb-1"><strong>Estado de la cuenta:</strong> {{ usuario.indActivo === 1 ? 'ACTIVA' : 'DESACTIVADA' }}</p>
+            <small class="text-muted">
+                <strong>Registrado:</strong> {{ usuario.stpRegistro | date: 'dd/MM/yyyy HH:mm' }} |
+                <strong>Última modificación:</strong> {{ usuario.stpActualizacion | date: 'dd/MM/yyyy HH:mm' }}
+            </small>
           </div>
           <div class="col-md-3 text-right">
             <button type="button" class="btn btn-sm"
@@ -31,68 +34,74 @@
 
   <div class="card p-4 shadow-sm" style="background: #fff; border: 1px solid #ddd;">
 
-    <!-- SECCIÓN 1: DATOS DEL RESPONSABLE -->
-    <h4 class="border-bottom pb-2 mb-4">1. Datos del Responsable de la Cuenta</h4>
+    <!-- 1. RESPONSABLE -->
+    <h4 class="border-bottom pb-2 mb-4 text-muted">1. Datos del Responsable</h4>
     <div class="row">
       <div class="col-md-4 form-group">
         <label class="control-label">Nombre(s)*</label>
-        <input type="text" class="form-control" [(ngModel)]="usuario.nomNombre" (ngModelChange)="registrarCambio()" placeholder="Nombres">
+        <input type="text" class="form-control" [(ngModel)]="usuario.nomNombre" (ngModelChange)="registrarCambio()">
       </div>
       <div class="col-md-4 form-group">
         <label class="control-label">Primer Apellido*</label>
-        <input type="text" class="form-control" [(ngModel)]="usuario.nomApellido1" (ngModelChange)="registrarCambio()" placeholder="Apellido Paterno">
+        <input type="text" class="form-control" [(ngModel)]="usuario.nomApellido1" (ngModelChange)="registrarCambio()">
       </div>
       <div class="col-md-4 form-group">
         <label class="control-label">Segundo Apellido</label>
-        <input type="text" class="form-control" [(ngModel)]="usuario.nomApellido2" (ngModelChange)="registrarCambio()" placeholder="Apellido Materno">
+        <input type="text" class="form-control" [(ngModel)]="usuario.nomApellido2" (ngModelChange)="registrarCambio()">
       </div>
     </div>
 
-    <!-- SECCIÓN 2: CONTACTO Y PROPÓSITO -->
-    <h4 class="border-bottom pb-2 mb-4 mt-4">2. Información de Contacto y Propósito</h4>
+    <!-- 2. CONTACTO -->
+    <h4 class="border-bottom pb-2 mb-4 mt-4 text-muted">2. Información de Contacto y Propósito</h4>
     <div class="row">
       <div class="col-md-6 form-group">
-        <label class="control-label">Descripción del uso de la cuenta (Propósito)*</label>
-        <textarea class="form-control" rows="3" [(ngModel)]="usuario.desUsoCuenta" 
-                  (ngModelChange)="registrarCambio()" placeholder="Indique el motivo o sistema que consumirá este acceso..."></textarea>
+        <label class="control-label">Descripción del uso de la cuenta*</label>
+        <textarea class="form-control" rows="3" [(ngModel)]="usuario.desUsoCuenta"
+                  (ngModelChange)="registrarCambio()" placeholder="Especifique el motivo institucional..."></textarea>
       </div>
       <div class="col-md-6">
         <div class="row">
           <div class="col-md-12 form-group">
-            <label class="control-label">Correo Electrónico de Contacto*</label>
+            <label class="control-label">Correo Electrónico*</label>
             <input type="email" class="form-control" [(ngModel)]="usuario.desCorreo" (ngModelChange)="registrarCambio()" placeholder="ejemplo@imss.gob.mx">
+            @if (usuario.desCorreo && !validarEmail(usuario.desCorreo)) {
+              <small class="text-danger">Formato de correo no válido.</small>
+            }
           </div>
           <div class="col-md-8 form-group">
             <label class="control-label">Teléfono (10 dígitos)*</label>
-            <input type="text" class="form-control" maxlength="10" [(ngModel)]="usuario.numTelefono" (ngModelChange)="registrarCambio()" placeholder="5512345678">
+            <input type="text" class="form-control" maxlength="10" [(ngModel)]="usuario.numTelefono" (ngModelChange)="registrarCambio()">
           </div>
           <div class="col-md-4 form-group">
-            <label class="control-label">Extensión</label>
-            <input type="text" class="form-control" maxlength="6" [(ngModel)]="usuario.numExtension" (ngModelChange)="registrarCambio()" placeholder="Opcional">
+            <label class="control-label">Ext.</label>
+            <input type="text" class="form-control" maxlength="6" [(ngModel)]="usuario.numExtension" (ngModelChange)="registrarCambio()">
           </div>
         </div>
       </div>
     </div>
 
-    <!-- SECCIÓN 3: ACCESO AL PORTAL (ROL PRIMERO) -->
-    <h4 class="border-bottom pb-2 mb-4 mt-4">3. Credenciales de Acceso al Portal/API</h4>
+    <!-- 3. ROL -->
+    <h4 class="border-bottom pb-2 mb-4 mt-4 text-muted">3. Perfil de Seguridad</h4>
     <div class="row">
-      <div class="col-md-4 form-group">
+      <div class="col-md-6 form-group">
         <label class="control-label">Rol del Sistema*</label>
         <select class="form-control" [(ngModel)]="usuario.cveRol" (change)="onRolChange()">
-          <option value="" disabled selected>-- Seleccione --</option>
+          <option value="" disabled selected>-- Seleccione el rol --</option>
           <option value="CLIENTE">CLIENTE (Ejecuta CICS)</option>
           <option value="ADMIN">ADMIN (Administrador)</option>
         </select>
       </div>
+    </div>
 
-      <div class="col-md-4 form-group">
-        <label class="control-label">Usuario API (Login)*</label>
+    <!-- 4. ACCESO PORTAL -->
+    <h4 class="border-bottom pb-2 mb-4 mt-4 text-muted">4. Credenciales de Acceso al Portal/API</h4>
+    <div class="row">
+      <div class="col-md-6 form-group">
+        <label class="control-label fw-bold">Usuario API (Login)*</label>
         <input type="text" class="form-control" [(ngModel)]="usuario.cveUsuarioApi"
-               (ngModelChange)="registrarCambio()" [disabled]="isEditMode" autocomplete="off" placeholder="ID de Identidad">
+               (ngModelChange)="registrarCambio()" [disabled]="isEditMode" autocomplete="off">
       </div>
-
-      <div class="col-md-4 form-group">
+      <div class="col-md-6 form-group">
         <label class="control-label">
             {{ isEditMode ? 'Cambiar Contraseña (Opcional)' : 'Password API*' }}
         </label>
@@ -101,10 +110,10 @@
       </div>
     </div>
 
-    <!-- SECCIÓN 4: MAINFRAME -->
+    <!-- 5. MAINFRAME -->
     @if (usuario.cveRol === 'CLIENTE') {
     <div class="mt-4 animate__animated animate__fadeIn">
-      <h4 class="border-bottom pb-2 mb-4">4. Credenciales de Mainframe (RACF)</h4>
+      <h4 class="border-bottom pb-2 mb-4 text-muted">5. Credenciales de Mainframe (RACF)</h4>
       <div class="row">
         <div class="col-md-6 form-group">
           <label class="control-label">Usuario RACF*</label>
@@ -115,19 +124,16 @@
           <label class="control-label">
             {{ isEditMode ? 'Password RACF (Opcional)' : 'Password RACF*' }}
           </label>
+          <!-- AHORA INCLUYE EL PLACEHOLDER DE ASTERISCOS -->
           <input type="password" class="form-control" [(ngModel)]="usuario.desPasswordMainframe"
                  (ngModelChange)="registrarCambio()" maxlength="8" autocomplete="new-password" placeholder="********">
         </div>
       </div>
 
       <div class="row mt-4 mb-2 align-items-center">
-        <div class="col-sm-6">
-          <h4 class="mb-0">Programas Autorizados*</h4>
-        </div>
+        <div class="col-sm-6"><h4>Programas Autorizados*</h4></div>
         <div class="col-sm-6 text-right">
-          <button type="button" class="btn btn-primary btn-sm" (click)="agregarFilaPermiso()">
-            Agregar Programa
-          </button>
+          <button type="button" class="btn btn-primary btn-sm" (click)="agregarFilaPermiso()">Agregar Programa</button>
         </div>
       </div>
 
@@ -138,30 +144,28 @@
               <th>Programa*</th>
               <th>Transacción*</th>
               <th>Timeout (seg)</th>
-              <th class="text-center">Estado / Auditoría</th>
+              <th class="text-center" style="width: 200px;">Estado / Auditoría</th>
               <th class="text-center">Acción</th>
             </tr>
           </thead>
           <tbody>
             @for (p of usuario.permisos; track $index) {
             <tr>
-              <td><input type="text" class="form-control input-sm text-uppercase" [(ngModel)]="p.nomPrograma"
-                         (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0" maxlength="8"></td>
-              <td><input type="text" class="form-control input-sm text-uppercase" [(ngModel)]="p.nomTransaccion"
-                         (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0" maxlength="4"></td>
-              <td><input type="number" class="form-control input-sm" [(ngModel)]="p.numTimeoutSec"
-                         (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0"></td>
+              <td><input type="text" class="form-control input-sm text-uppercase" [(ngModel)]="p.nomPrograma" (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0" maxlength="8"></td>
+              <td><input type="text" class="form-control input-sm text-uppercase" [(ngModel)]="p.nomTransaccion" (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0" maxlength="4"></td>
+              <td><input type="number" class="form-control input-sm" [(ngModel)]="p.numTimeoutSec" (ngModelChange)="registrarCambio()" [disabled]="p.indActivo === 0"></td>
               <td class="text-center">
-                <span class="label d-block mb-1" [ngClass]="p.indActivo === 1 ? 'label-success' : 'label-danger'">
-                  {{ p.indActivo === 1 ? 'ACTIVO' : 'BAJA' }}
-                </span>
-                @if (p.stpActualizacion) {
-                  <small class="text-muted" style="font-size: 0.8em;">Mod: {{ p.stpActualizacion | date:'dd/MM/yy HH:mm' }}</small>
+                <span class="label d-block mb-1" [ngClass]="p.indActivo === 1 ? 'label-success' : 'label-danger'">{{ p.indActivo === 1 ? 'ACTIVO' : 'BAJA' }}</span>
+                @if (p.stpRegistro) {
+                  <div class="small text-muted" style="font-size: 0.75em;">Reg: {{ p.stpRegistro | date:'dd/MM/yy HH:mm' }}</div>
+                }
+                @if (p.stpActualizacion && p.stpActualizacion !== p.stpRegistro) {
+                  <div class="small text-primary" style="font-size: 0.75em;">Mod: {{ p.stpActualizacion | date:'dd/MM/yy HH:mm' }}</div>
                 }
               </td>
               <td class="text-center">
                 <button type="button" class="btn btn-link text-danger" (click)="eliminarODesactivarPermiso($index)">
-                  <span class="bi" [ngClass]="p.indActivo === 1 ? 'bi-trash-fill' : 'bi-arrow-counterclockwise'"></span>
+                  <span class="bi" [ngClass]="p.indActivo === 1 ? 'bi-trash-fill' : 'bi-arrow-counterclockwise text-primary'"></span>
                 </button>
               </td>
             </tr>
@@ -172,19 +176,10 @@
     </div>
     }
 
-    <!-- BOTONES FINALES -->
+    <!-- ACCIONES FINALES -->
     <div class="row mt-5">
       <div class="col-md-12 text-right">
-        @if (cambiosRealizados) {
-        <div class="mb-3 animate__animated animate__fadeIn">
-            <span class="text-warning fw-bold" style="font-size: 1.1em;">
-                <i class="bi bi-exclamation-triangle-fill"></i>
-                Usted ha realizado cambios. Por favor, guarde para aplicar las modificaciones.
-            </span>
-        </div>
-        }
 
-        <hr>
         <button type="button" class="btn btn-default mr-2" (click)="regresar()">Cancelar</button>
         <button type="button" class="btn shadow-sm"
                 [ngClass]="cambiosRealizados ? 'btn-primary' : 'btn-default'"
@@ -194,6 +189,5 @@
         </button>
       </div>
     </div>
-
   </div>
 </div>

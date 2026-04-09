@@ -32,7 +32,7 @@ export class SharedService {
   currentRegistroPatronal = this.registroPatronalSource.asObservable();
 
 
-  // 2. Variables de Identidad (Usuario Autenticado)
+  // 2. Variables de Usuario (Usuario Autenticado)
   private rfcSesionSource = new BehaviorSubject<string>('');
   currentRfcSesion = this.rfcSesionSource.asObservable();
 

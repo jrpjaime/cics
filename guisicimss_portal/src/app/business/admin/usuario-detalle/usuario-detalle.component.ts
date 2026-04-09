@@ -15,6 +15,7 @@ import { finalize } from 'rxjs';
   templateUrl: './usuario-detalle.component.html'
 })
 export class UsuarioDetalleComponent implements OnInit {
+  // Inyecciones mediante inject() para mayor limpieza
   private route = inject(ActivatedRoute);
   private router = inject(Router);
   private adminService = inject(AdminService);
@@ -22,14 +23,17 @@ export class UsuarioDetalleComponent implements OnInit {
   private loader = inject(LoaderService);
   private modalService = inject(ModalService);
 
+  // Estados de control de la UI
   isEditMode = false;
   idUsuarioSeleccionado: number | null = null;
   cambiosRealizados = false;
-  estaCargado = false;
+  estaCargado = false; // Seguro para evitar falsos positivos durante el binding inicial
 
+  // Modelo del Usuario (Sincronizado con el esquema ampliado de base de datos)
   usuario: any = {};
 
   ngOnInit(): void {
+    // Escuchamos parámetros de la ruta de forma reactiva
     this.route.params.subscribe(params => {
         const id = params['id'];
         if (id) {
@@ -37,15 +41,17 @@ export class UsuarioDetalleComponent implements OnInit {
             this.idUsuarioSeleccionado = +id;
             this.cargarDetalle(this.idUsuarioSeleccionado);
         } else {
-            this.prepararNuevo();
+            this.prepararNuevoRegistro();
         }
     });
   }
 
   /**
-   * Inicializa el modelo para un registro nuevo incluyendo los campos de contacto y propósito.
+   * Inicializa un modelo limpio para una nueva Identidad.
    */
-  prepararNuevo() {
+  prepararNuevoRegistro() {
+    this.isEditMode = false;
+    this.idUsuarioSeleccionado = null;
     this.usuario = {
         cveUsuarioApi: '',
         desPasswordApi: '',
@@ -58,26 +64,29 @@ export class UsuarioDetalleComponent implements OnInit {
         numExtension: '',
         cveUsuarioMainframe: '',
         desPasswordMainframe: '',
-        cveRol: '', 
+        cveRol: '', // Forzamos selección inicial
         indActivo: 1,
         permisos: []
     };
     this.cambiosRealizados = false;
-    this.estaCargado = true;
+    this.estaCargado = true; // En alta nueva activamos el monitor de inmediato
   }
 
   /**
-   * Carga los datos desde el backend y mapea los nuevos campos de Oracle.
+   * Recupera la información de Oracle y mapea a minúsculas para Angular.
    */
   cargarDetalle(id: number) {
     this.loader.show();
     this.estaCargado = false;
+
     this.adminService.obtenerUsuarioPorId(id).subscribe({
       next: (data) => {
+        console.log("DATOS RECIBIDOS DE ORACLE:", data);
+
         this.usuario = {
           idUsuarioCics: data.ID_USUARIO_CICS,
           cveUsuarioApi: data.CVE_USUARIO_API,
-          desPasswordApi: '', // Se mantiene vacío por seguridad
+          desPasswordApi: '', // Vaciamos para que el input use el placeholder
           nomNombre: data.NOM_NOMBRE,
           nomApellido1: data.NOM_APELLIDO_1,
           nomApellido2: data.NOM_APELLIDO_2,
@@ -86,10 +95,12 @@ export class UsuarioDetalleComponent implements OnInit {
           numTelefono: data.NUM_TELEFONO,
           numExtension: data.NUM_EXTENSION,
           cveUsuarioMainframe: data.CVE_USUARIO_MAINFRAME,
-          desPasswordMainframe: '', // Se mantiene vacío por seguridad
+          desPasswordMainframe: '', // Vaciamos para que el input use el placeholder
           cveRol: data.CVE_ROL,
           indActivo: data.IND_ACTIVO,
-          // Mapeo de permisos incluyendo fechas de auditoría si se desean mostrar
+          stpRegistro: data.STP_REGISTRO,
+          stpActualizacion: data.STP_ACTUALIZACION,
+          // Mapeo de la lista de programas con sus propias fechas de auditoría
           permisos: (data.permisos || []).map((p: any) => ({
             idPermisoCics: p.ID_PERMISO_CICS,
             nomPrograma: p.NOM_PROGRAMA,
@@ -100,7 +111,8 @@ export class UsuarioDetalleComponent implements OnInit {
             stpActualizacion: p.STP_ACTUALIZACION
           }))
         };
-        
+
+        // Seguro contra binding: Esperamos a que el DOM se estabilice antes de monitorear cambios
         setTimeout(() => {
           this.estaCargado = true;
           this.cambiosRealizados = false;
@@ -109,14 +121,21 @@ export class UsuarioDetalleComponent implements OnInit {
       },
       error: () => {
         this.loader.hide();
-        this.alert.error("No se pudo cargar la información del usuario.");
+        this.alert.error("No se pudo recuperar la información del servidor.");
         this.regresar();
       }
     });
   }
 
   registrarCambio() {
-    if (this.estaCargado) this.cambiosRealizados = true;
+    if (this.estaCargado) {
+      this.cambiosRealizados = true;
+    }
+  }
+
+  validarEmail(email: string): boolean {
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    return emailRegex.test(email);
   }
 
   toggleEstadoUsuario() {
@@ -124,77 +143,79 @@ export class UsuarioDetalleComponent implements OnInit {
     this.registrarCambio();
   }
 
+  /**
+   * Interceptor de cambio de perfil: Alarma sobre la pérdida de programas al pasar a ADMIN.
+   */
   onRolChange() {
     if (!this.estaCargado) return;
 
     if (this.usuario.cveRol === 'ADMIN' && this.isEditMode && this.usuario.permisos.some((p:any) => p.indActivo === 1)) {
-        this.modalService.showDialog('confirm', 'warning', 'Atención',
-            'Al cambiar a perfil ADMIN, se darán de baja los programas autorizados de Mainframe. ¿Desea continuar?',
+        this.modalService.showDialog('confirm', 'warning', 'Cambio de Perfil',
+            'Al asignar el rol ADMIN, todos los programas y credenciales RACF se darán de baja automáticamente. <br><br>¿Desea aplicar y guardar ahora?',
             (conf: boolean) => {
                 if (conf) {
                     this.usuario.permisos.forEach((p: any) => p.indActivo = 0);
                     this.usuario.cveUsuarioMainframe = null;
                     this.usuario.desPasswordMainframe = null;
                     this.cambiosRealizados = true;
-                    this.guardar();
-                } else { this.usuario.cveRol = 'CLIENTE'; }
-            }, 'Aceptar', 'Cancelar');
+                    this.guardar(); // Ejecutamos persistencia inmediata
+                } else {
+                    this.usuario.cveRol = 'CLIENTE'; // Revertimos selección
+                }
+            }, 'Aceptar y Guardar', 'Cancelar');
     } else {
         this.registrarCambio();
     }
   }
 
   agregarFilaPermiso() {
-    this.usuario.permisos.push({ 
-        idPermisoCics: null, 
-        nomPrograma: '', 
-        nomTransaccion: '', 
-        numTimeoutSec: 30, 
-        indActivo: 1 
+    this.usuario.permisos.push({
+        idPermisoCics: null,
+        nomPrograma: '',
+        nomTransaccion: '',
+        numTimeoutSec: 30,
+        indActivo: 1
     });
     this.registrarCambio();
   }
 
   eliminarODesactivarPermiso(index: number) {
     const p = this.usuario.permisos[index];
-    if (p.idPermisoCics) p.indActivo = (p.indActivo === 1) ? 0 : 1;
-    else this.usuario.permisos.splice(index, 1);
+    if (p.idPermisoCics) {
+      p.indActivo = (p.indActivo === 1) ? 0 : 1;
+    } else {
+      this.usuario.permisos.splice(index, 1);
+    }
     this.registrarCambio();
   }
 
   guardar() {
-    // 1. Validaciones de Identidad (Nuevas)
+    // 1. Validaciones de Usuario
     if (!this.usuario.nomNombre || !this.usuario.nomApellido1 || !this.usuario.desUsoCuenta) {
-        this.alert.warn("Los datos del responsable y el propósito de la cuenta son obligatorios.");
-        return;
+        this.alert.warn("Los datos del responsable y el propósito son obligatorios."); return;
     }
 
-    // 2. Validaciones de Contacto (Nuevas)
-    if (!this.usuario.desCorreo || !this.usuario.numTelefono) {
-        this.alert.warn("El correo y el teléfono de contacto son obligatorios.");
-        return;
+    // 2. Validación de Contacto
+    if (!this.usuario.desCorreo || !this.validarEmail(this.usuario.desCorreo) || !this.usuario.numTelefono || this.usuario.numTelefono.length < 10) {
+        this.alert.warn("Proporcione un correo válido y un teléfono de 10 dígitos."); return;
     }
 
-    // 3. Validar Rol
+    // 3. Validación de Rol y Acceso Portal
     if (!this.usuario.cveRol) {
-        this.alert.warn("Debe seleccionar un Rol del Sistema."); 
-        return;
+        this.alert.warn("Seleccione un Rol del Sistema."); return;
     }
-
-    // 4. Validar Usuario y Password API
     if (!this.usuario.cveUsuarioApi || (!this.isEditMode && !this.usuario.desPasswordApi)) {
-      this.alert.warn("Los datos de acceso al portal son obligatorios."); 
-      return;
+      this.alert.warn("El Usuario y la Contraseña del portal son obligatorios."); return;
     }
 
-    // 5. Validaciones de Rol CLIENTE (RACF y Programas)
+    // 4. Validaciones obligatorias para perfil CLIENTE (RACF y Programas)
     if (this.usuario.cveRol === 'CLIENTE') {
         if (!this.usuario.cveUsuarioMainframe || (!this.isEditMode && !this.usuario.desPasswordMainframe)) {
-            this.alert.warn("Los datos RACF son obligatorios para perfiles de ejecución."); 
-            return;
+            this.alert.warn("Las credenciales RACF (Mainframe) son obligatorias para el perfil CLIENTE."); return;
         }
-        if (this.usuario.permisos.some((p:any) => p.indActivo === 1 && (!p.nomPrograma || !p.nomTransaccion))) {
-            this.alert.warn("Existen programas incompletos en la tabla."); 
+        // Evitar ORA-01400: Validar filas de la tabla
+        if (this.usuario.permisos.some((p:any) => p.indActivo === 1 && (!p.nomPrograma?.trim() || !p.nomTransaccion?.trim()))) {
+            this.alert.warn("Hay filas incompletas en la tabla de programas. Complete los datos obligatorios (*).");
             return;
         }
     }
@@ -206,7 +227,7 @@ export class UsuarioDetalleComponent implements OnInit {
       next: () => {
         this.loader.hide();
         this.cambiosRealizados = false;
-        this.alert.success("Información guardada exitosamente.");
+        this.alert.success("Información guardada exitosamente en el servidor.");
         setTimeout(() => this.regresar(), 1500);
       },
       error: (err) => {
@@ -216,5 +237,7 @@ export class UsuarioDetalleComponent implements OnInit {
     });
   }
 
-  regresar() { this.router.navigate(['/admin/usuarios']); }
+  regresar() {
+    this.router.navigate(['/admin/usuarios']);
+  }
 }

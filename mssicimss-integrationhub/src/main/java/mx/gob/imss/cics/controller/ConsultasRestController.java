@@ -29,8 +29,7 @@ import mx.gob.imss.cics.service.CicsConsultasService;
  
  
 
-@RestController   
-@CrossOrigin("*") 
+@RestController    
 @RequestMapping("/mssicimss-integrationhub/v1") 
 public class ConsultasRestController {
 	private final static Logger logger = LoggerFactory.getLogger(ConsultasRestController.class);
