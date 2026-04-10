@@ -33,7 +33,7 @@ export class UsuariosAdminComponent extends BaseComponent implements OnInit {
     rol: ''
   };
 
-  public paginador = this.createPaginator(5);
+  public paginador = this.createPaginator(10);
 
   constructor(sharedService: SharedService) {
     super(sharedService);
