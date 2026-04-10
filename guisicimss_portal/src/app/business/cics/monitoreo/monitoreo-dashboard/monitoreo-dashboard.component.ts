@@ -1,6 +1,6 @@
 import { Component, OnInit, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms'; // <--- 1. Importa esto
+import { FormsModule } from '@angular/forms';
 import { MonitoreoService } from '../services/monitoreo.service';
 import { LoaderService } from '../../../../shared/services/loader.service';
 import { finalize } from 'rxjs';
@@ -8,8 +8,7 @@ import { finalize } from 'rxjs';
 @Component({
   selector: 'app-monitoreo-dashboard',
   standalone: true,
-  // 2. Agrega FormsModule a la lista de imports
-  imports: [CommonModule, FormsModule], 
+  imports: [CommonModule, FormsModule],
   templateUrl: './monitoreo-dashboard.component.html',
   styleUrl: './monitoreo-dashboard.component.css'
 })
@@ -17,20 +16,18 @@ export class MonitoreoDashboardComponent implements OnInit {
   private monitoreoService = inject(MonitoreoService);
   private loader = inject(LoaderService);
 
-  filtros = {
-    fechaInicio: '',
-    fechaFin: ''
-  };
+  filtros = { fechaInicio: '', fechaFin: '' };
 
   data: any = {
-    resumen: {},
+    resumen: { TOTAL: 0, EXITOS: 0, ERRORES: 0, TIMEOUTS: 0, LATENCIA_MEDIA: 0 },
     topProgramas: [],
     peoresTiempos: [],
     usuariosActivos: [],
-    desgloseErrores: []  
+    ultimosErrores: []
   };
 
   ngOnInit() {
+    this.inicializarFechas();
     this.cargarMetricas();
   }
 
@@ -40,33 +37,38 @@ export class MonitoreoDashboardComponent implements OnInit {
       .pipe(finalize(() => this.loader.hide()))
       .subscribe({
         next: (res) => this.data = res,
-        error: (err) => console.error("Error al obtener métricas", err)
+        error: (err) => console.error(err)
       });
   }
 
+  inicializarFechas() {
+    const hoy = new Date();
+    const anio = hoy.getFullYear();
+    const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+    const dia = String(hoy.getDate()).padStart(2, '0');
+    const fechaHoy = `${anio}-${mes}-${dia}`;
+
+    this.filtros.fechaInicio = `${fechaHoy}T00:00`;
+    this.filtros.fechaFin = `${fechaHoy}T23:59`;
+  }
+
   getCalidadServicio(): number {
-    if (!this.data.resumen || !this.data.resumen.TOTAL || this.data.resumen.TOTAL === 0) return 0;
-    // Usamos Number() para asegurar que la operación aritmética sea correcta si el valor viene como string de la DB
-    const exitos = Number(this.data.resumen.EXITOS || 0);
-    const total = Number(this.data.resumen.TOTAL || 0);
-    return (exitos / total) * 100;
+    const total = Number(this.data.resumen?.TOTAL || 0);
+    if (total === 0) return 0;
+    return (Number(this.data.resumen.EXITOS || 0) / total) * 100;
   }
 
   getPosicionPuntero(): number {
     const latencia = Number(this.data.resumen?.LATENCIA_MEDIA || 0);
-    
-    // Escala total: 30,000ms (30 segundos)
-    // 30,000ms = 100% de la barra
-    const porcentaje = (latencia / 30000) * 100;
-    
-    return Math.min(porcentaje, 100); // Tope al 100% si excede
+    // Escala de 60 segundos (60,000ms)
+    return Math.min((latencia / 60000) * 100, 100);
   }
 
-  // Opcional: Función para el texto de estado dinámico
   getEstadoSLA(): string {
-      const lat = Number(this.data.resumen?.LATENCIA_MEDIA || 0);
-      if (lat <= 5000) return '🟢 ÓPTIMO';
-      if (lat <= 12000) return '🟡 LENTO';
-      return '🔴 CRÍTICO';
+    const lat = Number(this.data.resumen?.LATENCIA_MEDIA || 0);
+    if (lat <= 10000) return '✅ ÓPTIMO';
+    if (lat <= 25000) return '⚠️ LENTO';
+    if (lat <= 40000) return '🟠 MUY LENTO';
+    return '🚨 CRÍTICO';
   }
 }

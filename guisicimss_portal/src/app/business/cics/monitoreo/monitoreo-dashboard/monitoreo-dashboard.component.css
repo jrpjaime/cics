@@ -1,128 +1,158 @@
 /* =============================================================================
-   ESTILOS PERSONALIZADOS PARA DASHBOARD (SIN TOCAR BOTONES DE GOB.MX)
+   DISEÑO EJECUTIVO MEJORADO (LEGIBILIDAD ALTA)
    ============================================================================= */
 
-/* Contenedores para Tarjetas Métricas (KPIs) */
 .kpi-container {
   padding: 24px;
-  border-radius: 4px;
+  border-radius: 12px;
   color: #ffffff;
-  min-height: 180px;
+  min-height: 180px; /* Aumentado para dar aire a los textos */
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   position: relative;
+  overflow: hidden;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.kpi-container:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+/* GRADIENTES */
+.bg-workload { background: linear-gradient(135deg, #13322b 0%, #1e5246 100%); }
+.bg-success { background: linear-gradient(135deg, #28a745 0%, #208637 100%); }
+.bg-danger { background: linear-gradient(135deg, #d43f3a 0%, #a9322d 100%); }
+.bg-latency { background: linear-gradient(135deg, #007bff 0%, #0056b3 100%); }
+.bg-warning-sla { background: linear-gradient(135deg, #f0ad4e 0%, #d98a1f 100%); }
+.bg-orange-sla { background: linear-gradient(135deg, #ff851b 0%, #e67615 100%); }
+
+.kpi-bg-icon {
+  position: absolute;
+  right: -10px;
+  bottom: -10px;
+  font-size: 5.5rem;
+  opacity: 0.12;
+  transform: rotate(-10deg);
+}
+
+/* TITULOS DE TARJETAS (Más grandes y claros) */
+.kpi-title {
+  font-size: 1.2rem; /* Aumentado */
+  text-transform: uppercase;
+  font-weight: 800; /* Más grueso */
+  letter-spacing: 1.2px;
+  opacity: 1;
 }
 
 .kpi-big-number {
-  font-size: 3.2rem;
-  font-weight: 700;
+  font-size: 2.5rem; /* Aumentado */
+  font-weight: 800;
   line-height: 1;
-  margin: 10px 0;
+  margin: 12px 0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.2);
 }
 
-.kpi-title {
-  font-size: 1rem;
-  text-transform: uppercase;
+/* TEXTOS DESCRIPTIVOS BAJO EL NÚMERO */
+.kpi-container small, .kpi-container .small-label {
+  font-size: 1rem !important; /* Aumentado significativamente */
   font-weight: 600;
-  opacity: 0.85;
+  color: rgba(255, 255, 255, 0.95);
 }
 
-/* --- MEDIDOR DE LATENCIA (SEMÁFORO) --- */
-.latency-meter-container {
-  background: rgba(255, 255, 255, 0.2);
-  height: 12px;
+/* --- BARRA DE LATENCIA ESTILIZADA --- */
+.latency-scale-container {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 15px; /* Más aire */
+  border-radius: 8px;
+}
+
+.latency-bar {
+  height: 10px; /* Más gruesa */
+  width: 100%;
   border-radius: 10px;
-  margin: 10px 0;
-  overflow: hidden;
+  background: linear-gradient(to right,
+    #28a745 0% 16.6%, #ffc107 16.7% 41.6%, #fd7e14 41.7% 66.6%, #dc3545 66.7% 100%
+  );
   position: relative;
-  border: 1px solid rgba(255, 255, 255, 0.4);
 }
 
-.latency-meter-fill {
-  height: 100%;
-  transition: width 0.5s ease-in-out, background-color 0.5s ease;
+.latency-pointer {
+  position: absolute;
+  top: -6px;
+  width: 14px;
+  height: 14px;
+  background-color: #fff;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(0,0,0,0.8);
+  transform: translateX(-50%);
+  z-index: 5;
 }
 
-/* Cambios de color en el relleno del medidor de latencia */
-.latency-green {
-  background-color: #ffffff; /* Si todo va bien el relleno es blanco contrastando con el azul de la tarjeta */
-}
-
-.latency-yellow {
-  background-color: #ffc107;
-}
-
-.latency-red {
-  background-color: #ff4356;
-}
-
+/* MARCADORES DE TIEMPO (Mucho más legibles) */
 .latency-markers {
   display: flex;
   justify-content: space-between;
-  font-size: 0.75rem;
-  opacity: 0.9;
-  margin-top: -5px;
+  font-size: 1.2rem; /* Aumentado de 9px a 13px aprox */
+  font-weight: 800;
+  margin-top: 8px;
+  color: #fff;
 }
 
-/* Tablas Institucionales */
+/* TABLAS EJECUTIVAS */
 .table-dashboard {
-  background-color: #ffffff;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.08);
 }
 
 .table-dashboard thead th {
-  background-color: #f6f6f6;
-  font-size: 13px;
-  color: #545454;
+  background-color: #212529;
+  color: white;
+  text-transform: uppercase;
+  font-size: 1.2rem; /* Aumentado */
+  padding: 15px;
+  letter-spacing: 0.5px;
+}
+
+.table-dashboard tbody td {
+  font-size: 1.5rem; /* Aumentado */
+  padding: 12px 15px;
   vertical-align: middle;
 }
 
-.text-technical {
-  font-family: 'Courier New', Courier, monospace;
-  font-weight: bold;
+/* FILTROS */
+.form-group label {
+  font-size: 1rem; /* Títulos de los inputs más grandes */
+  margin-bottom: 8px;
+  display: block;
 }
-
 
 .form-control {
-    height: auto !important;
-    padding: 8px 12px !important;
+  font-size: 1.5rem !important; /* Texto dentro de inputs más grandes */
+  height: 45px !important;
+}
+
+/* ETIQUETA DE ESTADO (ÓPTIMO, LENTO...) */
+.status-badge {
+  background: rgba(0,0,0,0.3);
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 1.2rem; /* Aumentado */
+  font-weight: 800;
+  letter-spacing: 1px;
 }
 
 
-/* Texto de error compacto para no deformar la tabla */
-.error-diagnostico-txt {
-    font-size: 12px !important; /* Tamaño más pequeño que el resto */
-    line-height: 1.2;
-    display: block;
-    max-width: 300px; /* Limita el ancho para que no empuje las otras columnas */
-    word-wrap: break-word; /* Si el mensaje es muy largo, salta de línea */
-    font-weight: normal;
-}
-
-/* Reducir el icono de advertencia para que no estorbe */
-.error-diagnostico-txt i {
-    font-size: 10px;
-    vertical-align: middle;
-}
-
-
-/* La barra tricolor recalibrada */
-.latency-bar {
-  height: 12px;
-  width: 100%;
-  border-radius: 10px;
-  background: linear-gradient(to right, 
-    #28a745 0%, #28a745 15%,    /* Verde: hasta 5s (15% de la barra) */
-    #ffc107 16%, #ffc107 45%,   /* Amarillo: hasta 15s (45% de la barra) */
-    #dc3545 46%, #dc3545 100%   /* Rojo: más de 15s */
-  );
-  border: 1px solid rgba(255,255,255,0.3);
-}
-
-.latency-markers {
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  opacity: 0.9;
-  margin-top: 5px;
+.table-dashboard code {
+  font-size: 1.2rem !important; /* <--- Aumenta este número para que sea más grande */
+  padding: 4px 10px;           /* Espacio interno del cuadrito */
+  background-color: #f8f0f2;   /* Color de fondo suave */
+  color: #621132;              /* Color de letra guinda */
+  border-radius: 4px;          /* Bordes redondeados */
+  font-family: inherit;        /* Para que no se vea como código de programador */
+  font-weight: 700;            /* Ponerlo en negrita */
 }

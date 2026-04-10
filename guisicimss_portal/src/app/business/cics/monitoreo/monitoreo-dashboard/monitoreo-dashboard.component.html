@@ -1,153 +1,120 @@
 <div class="container-fluid p-0 mb-5">
 
-  <!-- CABECERA: TÍTULO -->
-  <div class="row">
-    <div class="col-md-12">
-      <h2 class="mb-0">Monitoreo del Sistema CICS</h2>
-      <p class="text-muted">Análisis del comportamiento del Hub CICS.</p>
+  <div class="row align-items-center mt-3">
+    <div class="col-md-8">
+      <h1 class="fw-bold mb-0">Dashboard de Integración CICS</h1>
+      <p class="fs-5 text-muted">Estado operativo en tiempo real del Hub CICS.</p>
     </div>
-  </div>
-  <hr class="red">
-
-  <!-- ACCIÓN PRIMARIA: ACTUALIZAR DASHBOARD -->
-  <div class="row mb-4">
-    <div class="col-md-12">
-      <button type="button" class="btn btn-primary" (click)="cargarMetricas()">
-        <span class="bi bi-arrow-clockwise"></span> Actualizar información del tablero
+    <div class="col-md-4 text-right">
+      <button type="button" class="btn btn-primary btn-lg px-5 fw-bold" (click)="cargarMetricas()">
+        <i class="bi bi-arrow-clockwise"></i> ACTUALIZAR DATOS
       </button>
     </div>
   </div>
+  <hr class="red" style="height: 3px;">
 
-<!-- SECCIÓN DE FILTROS (Actualizada para Horas/Minutos) -->
-  <div class="row mb-5 bg-light p-3 rounded" style="border: 1px solid #eee; margin-left: 0; margin-right: 0;">
+  <!-- FILTROS (Más grandes) -->
+  <div class="row mb-5 bg-white shadow-sm p-4 rounded border">
     <div class="col-md-4 form-group">
-      <label class="control-label">Desde (Fecha y Hora):</label>
-      <!-- Cambiado a datetime-local -->
+      <label class="fw-bold text-dark">RANGO INICIAL:</label>
       <input type="datetime-local" [(ngModel)]="filtros.fechaInicio" class="form-control">
     </div>
     <div class="col-md-4 form-group">
-      <label class="control-label">Hasta (Fecha y Hora):</label>
-      <!-- Cambiado a datetime-local -->
+      <label class="fw-bold text-dark">RANGO FINAL:</label>
       <input type="datetime-local" [(ngModel)]="filtros.fechaFin" class="form-control">
     </div>
-    <div class="col-md-4">
+    <div class="col-md-4 text-right">
       <br>
-      <button type="button" class="btn btn-primary mr-2" (click)="cargarMetricas()">
-        Analizar Rango
-      </button>
-      <button type="button" class="btn btn-default" (click)="filtros.fechaInicio=''; filtros.fechaFin=''; cargarMetricas()">
-        Limpiar
-      </button>
+      <button type="button" class="btn btn-primary btn-lg px-5 fw-bold" (click)="cargarMetricas()">ANALIZAR</button>
+      <button type="button" class="btn btn-link btn-lg text-muted" (click)="inicializarFechas(); cargarMetricas()">Resetear</button>
     </div>
   </div>
 
-  <!-- FILA 1: TARJETAS DE INDICADORES (KPIs) -->
+  <!-- KPIs -->
   <div class="row mb-4">
-
-    <!-- CARGA DE TRABAJO -->
+    <!-- CARGA -->
     <div class="col-md-3">
-      <div class="kpi-container shadow-sm" style="background-color: #13322B;">
+      <div class="kpi-container bg-workload">
+        <i class="bi bi-cpu-fill kpi-bg-icon"></i>
         <span class="kpi-title">Carga de Trabajo</span>
         <div class="kpi-big-number">{{ data.resumen?.TOTAL || 0 | number }}</div>
-        <small class="mt-auto"><i class="bi bi-cpu"></i> Transacciones totales</small>
+        <span class="small-label"><i class="bi bi-activity"></i> Transacciones totales</span>
       </div>
     </div>
 
-    <!-- DISPONIBILIDAD (HEALTH) -->
+    <!-- DISPONIBILIDAD -->
     <div class="col-md-3">
-      <div class="kpi-container shadow-sm" style="background-color: #28a745;">
+      <div class="kpi-container bg-success">
+        <i class="bi bi-shield-check kpi-bg-icon"></i>
         <span class="kpi-title">Disponibilidad</span>
         <div class="kpi-big-number">{{ getCalidadServicio() | number:'1.1-1' }}%</div>
-        <div class="progress" style="height: 8px; background: rgba(255,255,255,0.2); margin-bottom: 5px;">
-          <div class="progress-bar" role="progressbar" [style.width]="getCalidadServicio() + '%'" style="background-color: #ffffff;"></div>
+        <div class="progress" style="height: 10px; background: rgba(255,255,255,0.3);">
+          <div class="progress-bar bg-white" [style.width]="getCalidadServicio() + '%'"></div>
         </div>
-        <small class="mt-auto">Operación exitosa</small>
+        <span class="small-label mt-2">Salud del Servicio</span>
       </div>
     </div>
 
-    <!-- FALLAS CRÍTICAS -->
+    <!-- INCIDENTES -->
     <div class="col-md-3">
-      <div class="kpi-container shadow-sm" style="background-color: #D43F3A;">
-        <span class="kpi-title">Fallas Críticas</span>
-        <div class="kpi-big-number">{{ (data.resumen?.ERRORES + data.resumen?.TIMEOUTS) || 0 }}</div>
-        <div class="mt-auto border-top pt-2" style="border-color: rgba(255,255,255,0.2) !important;">
-          @for (err of data.desgloseErrores; track err.DES_ESTADO_TRANS) {
-            <div class="d-flex justify-content-between" style="font-size: 11px;">
-              <span>{{ err.DES_ESTADO_TRANS }}:</span>
-              <span class="fw-bold">{{ err.CANTIDAD }}</span>
-            </div>
-          }
+      <div class="kpi-container bg-danger">
+        <i class="bi bi-exclamation-octagon kpi-bg-icon"></i>
+        <span class="kpi-title">Incidentes</span>
+        <div class="kpi-big-number">{{ ((data.resumen?.ERRORES || 0) + (data.resumen?.TIMEOUTS || 0)) | number }}</div>
+        <div class="d-flex justify-content-between border-top pt-2 mt-2" style="border-color: rgba(255,255,255,0.4) !important;">
+          <span class="fw-bold">Errors: {{ data.resumen?.ERRORES | number }}</span>
+          <span class="fw-bold">Timeouts: {{ data.resumen?.TIMEOUTS | number }}</span>
         </div>
       </div>
     </div>
 
-    <!-- LATENCIA MEDIA (CON MEDIDOR SEMÁFORO) -->
-<div class="col-md-3">
-  <div class="kpi-container shadow-sm"
-       [style.background-color]="data.resumen?.LATENCIA_MEDIA > 12000 ? '#D43F3A' : (data.resumen?.LATENCIA_MEDIA > 5000 ? '#f0ad4e' : '#007bff')">
-    <span class="kpi-title">Latencia Media (SLA)</span>
-    <div class="kpi-big-number">{{ data.resumen?.LATENCIA_MEDIA || 0 | number }} <small style="font-size: 1rem;">ms</small></div>
+    <!-- LATENCIA -->
+    <div class="col-md-3">
+      <div class="kpi-container"
+           [ngClass]="data.resumen?.LATENCIA_MEDIA > 40000 ? 'bg-danger' : (data.resumen?.LATENCIA_MEDIA > 25000 ? 'bg-orange-sla' : (data.resumen?.LATENCIA_MEDIA > 10000 ? 'bg-warning-sla' : 'bg-latency'))">
+        <i class="bi bi-speedometer2 kpi-bg-icon"></i>
+        <span class="kpi-title">Latencia (SLA)</span>
+        <div class="kpi-big-number">{{ data.resumen?.LATENCIA_MEDIA || 0 | number }} <span style="font-size: 1.2rem;">ms</span></div>
 
-    <!-- MEDIDOR VISUAL RECALIBRADO -->
-    <div class="latency-scale-container" style="position: relative; margin-top: 10px;">
-      <div class="latency-bar"></div>
-      <!-- El puntero se mueve en una escala de 30 segundos -->
-      <div class="latency-pointer" [style.left.%]="getPosicionPuntero()"></div>
-
-      <div class="latency-markers text-white">
-        <span>0s</span>
-        <span>5s</span>
-        <span>15s</span>
-        <span>30s</span>
+        <div class="latency-scale-container">
+          <div class="latency-bar">
+             <div class="latency-pointer" [style.left.%]="getPosicionPuntero()"></div>
+          </div>
+          <div class="latency-markers">
+            <span>0s</span><span>10s</span><span>25s</span><span>40s</span><span>60s</span>
+          </div>
+        </div>
+        <div class="status-badge text-center mt-2 text-uppercase">
+           {{ getEstadoSLA() }}
+        </div>
       </div>
     </div>
-
-    <div class="mt-auto fw-bold text-center border rounded py-1" style="background: rgba(0,0,0,0.15); font-size: 0.8rem;">
-      ESTADO: {{ getEstadoSLA() }}
-    </div>
-  </div>
-</div>
-
   </div>
 
-  <!-- FILA 2: TABLAS DE RENDIMIENTO Y ACTIVIDAD -->
+  <!-- TABLAS -->
   <div class="row mt-5">
-
     <div class="col-md-4">
-      <h4 class="border-bottom pb-2">Programas Demandados</h4>
-      <table class="table table-striped table-bordered table-dashboard">
-        <thead>
-          <tr>
-            <th>Programa</th>
-            <th class="text-center">TXs</th>
-          </tr>
-        </thead>
+      <h3 class="fw-bold mb-3"><i class="bi bi-bar-chart-line text-primary"></i> Programas Demandados</h3>
+      <table class="table table-dashboard table-hover">
+        <thead><tr><th>PROGRAMA</th><th class="text-center">TXs</th></tr></thead>
         <tbody>
           @for (p of data.topProgramas; track p.NOM_PROGRAMA) {
-            <tr>
-              <td><strong>{{ p.NOM_PROGRAMA }}</strong></td>
-              <td class="text-center">{{ p.EJECUCIONES | number }}</td>
-            </tr>
+            <tr><td><strong>{{ p.NOM_PROGRAMA }}</strong></td><td class="text-center fw-bold">{{ p.EJECUCIONES | number }}</td></tr>
           }
         </tbody>
       </table>
     </div>
 
     <div class="col-md-4">
-      <h4 class="border-bottom pb-2">Top Programas Lentos</h4>
-      <table class="table table-striped table-bordered table-dashboard">
-        <thead>
-          <tr>
-            <th>Programa</th>
-            <th class="text-center">Promedio ms</th>
-          </tr>
-        </thead>
+      <h3 class="fw-bold mb-3"><i class="bi bi-hourglass-split text-warning"></i> Programas Lentos</h3>
+      <table class="table table-dashboard table-hover">
+        <thead><tr><th>PROGRAMA</th><th class="text-center">PROMEDIO</th></tr></thead>
         <tbody>
           @for (p of data.peoresTiempos; track p.NOM_PROGRAMA) {
             <tr>
               <td><strong>{{ p.NOM_PROGRAMA }}</strong></td>
-              <td class="text-center fw-bold" [ngClass]="p.PROMEDIO_MS > 2000 ? 'text-danger' : 'text-primary'">
-                {{ p.PROMEDIO_MS | number }}
+              <td class="text-center fw-bold text-danger">
+                {{ p.PROMEDIO_MS | number }} ms
               </td>
             </tr>
           }
@@ -156,89 +123,39 @@
     </div>
 
     <div class="col-md-4">
-      <h4 class="border-bottom pb-2">Usuarios más Activos</h4>
-      <table class="table table-striped table-bordered table-dashboard">
-        <thead>
-          <tr>
-            <th>Usuario API</th>
-            <th class="text-center">Total TXs</th>
-          </tr>
-        </thead>
+      <h3 class="fw-bold mb-3"><i class="bi bi-people text-info"></i> Usuarios con más actividad</h3>
+      <table class="table table-dashboard table-hover">
+        <thead><tr><th>USUARIO API</th><th class="text-center">TOTAL TXs</th></tr></thead>
         <tbody>
           @for (u of data.usuariosActivos; track u.CVE_USUARIO_API) {
-            <tr>
-              <td><code>{{ u.CVE_USUARIO_API }}</code></td>
-              <td class="text-center">{{ u.PETICIONES | number }}</td>
-            </tr>
+            <tr><td><code class="fs-4">{{ u.CVE_USUARIO_API }}</code></td><td class="text-center fw-bold">{{ u.PETICIONES | number }}</td></tr>
           }
         </tbody>
       </table>
     </div>
-
   </div>
 
-  <!-- FILA 3: BITÁCORA TÉCNICA Y DIAGNÓSTICO -->
-  <div class="row mt-5">
-
-    <div class="col-md-4">
-      <h4 class="border-bottom pb-2 text-danger">Fallas por Programa</h4>
-      <table class="table table-bordered table-dashboard">
-        <thead>
-          <tr>
-            <th>Programa</th>
-            <th class="text-right">Fallas</th>
-          </tr>
-        </thead>
-        <tbody>
-          @for (f of data.topFallasProgramas; track f.NOM_PROGRAMA) {
-            <tr>
-              <td><span class="label label-danger">{{ f.NOM_PROGRAMA }}</span></td>
-              <td class="text-right"><strong>{{ f.FALLAS | number }}</strong></td>
-            </tr>
-          }
-        </tbody>
-      </table>
-    </div>
-
-    <div class="col-md-8">
-      <h4 class="border-bottom pb-2">Diagnóstico de Errores</h4>
-      <div class="table-responsive">
-        <table class="table table-hover table-bordered table-dashboard">
-          <thead>
-            <tr>
-              <th>Hora</th>
-              <th>Programa</th>
-              <th>Usuario</th>
-              <th>Error Mainframe (Diagnóstico)</th>
-            </tr>
+  <!-- DIAGNÓSTICO -->
+  <div class="row mt-5 mb-5">
+    <div class="col-md-12">
+      <h3 class="fw-bold mb-3"><i class="bi bi-bug-fill text-danger"></i> Diagnóstico de Fallas Recientes</h3>
+      <div class="table-responsive bg-white shadow rounded">
+        <table class="table table-hover mb-0">
+          <thead class="table-dark">
+            <tr><th class="p-3">HORA</th><th class="p-3">PROGRAMA</th><th class="p-3">USUARIO</th><th class="p-3">DETALLE TÉCNICO</th></tr>
           </thead>
           <tbody>
             @for (log of data.ultimosErrores; track log.STP_REGISTRO) {
-              <tr>
-                <td class="text-muted small">{{ log.STP_REGISTRO | date:'HH:mm:ss' }}</td>
-                <td><strong>{{ log.NOM_PROGRAMA }}</strong></td>
-                <td><code>{{ log.CVE_USUARIO_API }}</code></td>
-                <td class="text-danger">
-                    <span class="error-diagnostico-txt">
-                        <i class="bi bi-exclamation-triangle-fill"></i>
-                        {{ log.ERROR_MSG || 'Timeout de Red (Sin respuesta del Host)' }}
-                    </span>
-                </td>
+              <tr style="height: 60px;">
+                <td class="fw-bold p-3">{{ log.STP_REGISTRO | date:'HH:mm:ss' }}</td>
+                <td class="p-3"><span class="badge bg-secondary fs-6">{{ log.NOM_PROGRAMA }}</span></td>
+                <td><code class="fs-4">{{ log.CVE_USUARIO_API }}</code></td>
+                <td class="text-danger fw-bold p-3 fs-6">{{ log.ERROR_MSG || 'Host Timeout / Sin Respuesta' }}</td>
               </tr>
             }
           </tbody>
         </table>
       </div>
-    </div>
-
-  </div>
-
-  <!-- PIE DE PÁGINA -->
-  <div class="row mt-5 pt-3">
-    <div class="col-md-12 text-center text-muted">
-      <p class="small">
-        <i class="bi bi-info-circle"></i> Información auditada automáticamente por el <strong>Integration Hub</strong> a través de IBM CICS Transaction Gateway.
-      </p>
     </div>
   </div>
 
