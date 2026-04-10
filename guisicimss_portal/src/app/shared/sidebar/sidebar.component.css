@@ -1,64 +1,110 @@
+/* --- BARRA SECUNDARIA (SICIMSS) --- */
+.sub-navbar-sicimss {
+  /* Intentará tomar el color de la identidad base, si no, usa el guinda */
 
+  height: 80px;
+  display: flex;
+  align-items: center;
 
- .custom-user-dropdown-width {
-  /* Establece un ancho fijo para el menú desplegable */
-  width: 250px !important; /* Puedes ajustar este valor. 250px suele ser un buen balance. */
-
-  /* Asegura que no sea más pequeño que un mínimo razonable */
-  min-width: 200px !important;
-
-  /* Permite que crezca hasta un máximo si es necesario, aunque con 'width' fijo, es menos relevante */
-  max-width: 300px !important;
-}
-
-/* Estilos para el contenedor del texto dentro del menú desplegable */
-.custom-user-dropdown-width .text-wrap {
-  white-space: normal !important;        /* Asegura que el texto se envuelva en varias líneas */
-  word-break: break-word !important;     /* Rompe palabras largas que no caben, evitando desbordamiento */
-  padding: 8px 16px !important;          /* Ajusta el padding para dar más espacio interno si es necesario */
 }
 
 
-nav.sub-navbar {
-  top: 42px; /* Ajusta este valor si la barra de gob.mx es más alta o más baja */
-}
-
-.info-patron-subtitulo {
+.navbar-brand-sicimss {
+  color: #fff !important;
   font-size: 1.5rem;
-  font-weight: 300;
-  color: #c0ccd6;
-  padding-left: 1.0rem;
-  margin-top: -5px;
 }
 
 
-/* 2. Ajuste del menú desplegable */
-.custom-user-dropdown-width {
-  /* Ancho y comportamiento */
-  width: 280px !important; /* Un poco más ancho para nombres largos */
-  min-width: 200px !important;
-  max-width: 90vw !important; /* Evita que se salga en pantallas de celular */
 
-  /* Posicionamiento forzado a la derecha */
+/* --- BOTÓN MI PERFIL --- */
+.user-profile-btn {
+  color: #fff !important;
+  background: rgba(255, 255, 255, 0.15);
+  padding: 8px 15px !important;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  margin-top: 5px; /* Centrado visual */
+}
+
+/* --- DROPDOWN (CAJA) --- */
+/* --- DROPDOWN DE USUARIO --- */
+.user-card-popup {
   position: absolute;
-  right: 0;
-  left: auto;
-  margin-top: 8px; /* Pequeño espacio para separarlo de la barra */
-
-  /* Estética */
-  border-radius: 0 0 4px 4px;
+  /* Asegura que salga debajo de tu barra */
+  top: 80% !important;
+  right: 0 !important;
+  left: auto !important;
+  width: 250px;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+  border: none;
+  background-color: #fff;
 }
 
-/* 3. Manejo del texto largo */
-.custom-user-dropdown-width .text-wrap {
-  white-space: normal !important;
-  word-break: break-word !important;
-  line-height: 1.2; /* Mejora la lectura en nombres largos */
+/* Encabezado interno del dropdown */
+.user-card-header {
+  display: flex;
+  padding: 15px;
+  align-items: center;
+  background-color: #fcfcfc;
+  gap: 12px;
 }
 
+/* El círculo del avatar hereda el color dinámico también */
+.user-card-avatar {
+  background-color: var(--navbar-main-color, #691C32);
+  color: white;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
+.user-card-meta {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 
+.user-card-name {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.user-card-role {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+/* Botón de Salir */
+.user-logout-link {
+  padding: 12px 15px;
+  color: #a93b37 !important; /* Rojo descriptivo */
+  font-weight: 700;
+}
+
+.user-logout-link:hover {
+  background-color: #fff5f5;
+}
+
+/* RESET PARA QUE NO SE ENCIME SOBRE GOBMX */
 :host {
-  margin-bottom: 0 !important;
-  padding-bottom: 0 !important;
+  display: block;
+  margin: 0 !important;
+  padding: 0 !important;
 }
+
+
+
+
+
+
+
+
+
+

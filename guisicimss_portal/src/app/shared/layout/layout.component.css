@@ -1,11 +1,11 @@
 /* Contenedor de la barra superior para que siempre esté arriba */
 .header-fixed-container {
   position: fixed;
-  top: 0;
+  /* El secreto: Deja espacio para la barra de gob.mx (aprox 45px) */
+  top: 40px;
   left: 0;
   right: 0;
-  z-index: 1100;
-  background-color: #fff;
+  z-index: 1000; /* Un nivel alto, pero que permita ver el dropdown */
 }
 
 /* Contenedor principal que empieza DEBAJO de la barra superior */
@@ -23,29 +23,21 @@
 
 .layout-wrapper {
   display: flex;
-  /* Reducimos este valor. Prueba con 68px o 70px */
-  margin-top: 68px !important;
-  min-height: calc(100vh - 68px);
-  width: 100%;
-  background-color: #fff;
-  align-items: stretch;
+  /* Altura Gob (45px) + Tu barra (60px) = 105px */
+  margin-top: 80px;
+  min-height: calc(100vh - 105px);
 }
 
 .main-content {
   flex-grow: 1;
-  min-width: 0;
-  /* Quitamos todo el padding superior para que el título pegue arriba */
-  padding: 0px 30px 30px 30px;
-  background-color: #fff;
+  padding: 20px;
 }
 
 .sidebar-aside {
   width: 290px;
   flex-shrink: 0;
-  border-right: 1px solid #ddd;
   background-color: #fff;
-  /* Aseguramos que el menú tampoco tenga margen superior interno */
-  padding-top: 0;
+  border-right: 1px solid #ddd;
 }
 
 
