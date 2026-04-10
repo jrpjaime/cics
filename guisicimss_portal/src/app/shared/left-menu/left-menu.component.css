@@ -1,271 +1,158 @@
 :host {
-
-
   display: block;
-  width: 320px;
-  flex-shrink: 0;
-  transition: width 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-
-  /* Sombra más elegante y difuminada */
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.06);
-  z-index: 100;
-
-  /* Ajuste de posición */
-   margin-top: 60px;  /* Lo manejamos con calc en height si es necesario, o padding-top */
-  /* O calc(100vh - altura_header)   height: 100vh; */
-  background-color: var(--bg-sidebar);
-  align-items: center;
-}
-
-/* Estado contraído */
-:host-context(.menu-collapsed) {
-  width: 70px;
+  width: 100%;
+  height: 100%;
+  font-family: 'Montserrat', sans-serif; /* O la fuente que uses */
 }
 
 .side-menu {
-  width: 100%;
-  height: 100%;
-  background-color: var(--bg-sidebar);
-  border-right: 1px solid var(--border-color);
   display: flex;
   flex-direction: column;
+  height: 100%;
+  background-color: #ffffff;
 }
 
-/* --- HEADER DEL MENÚ --- */
-.menu-header {
-  height: 20px; /* Altura fija para consistencia */
-  padding: 0 35px;
-  border-bottom: 1px solid var(--border-color);
-  display: flex;
-  align-items: center;
-  justify-content: flex-start; /* Alineado a la izquierda   */
-  background: #fff;
-}
-
-.app-logo {
-  font-size: 1.1rem;
-  font-weight: 700;
-
-  letter-spacing: 1.5px;
-  text-transform: uppercase;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-/* --- LISTA --- */
 .nav-list {
   list-style: none;
-  padding: 10px 0;
+  padding: 0;
   margin: 0;
-  overflow-y: auto;
   flex-grow: 1;
 }
 
-/* Scrollbar personalizado fino */
-.nav-list::-webkit-scrollbar {
-  width: 5px;
-}
-.nav-list::-webkit-scrollbar-thumb {
-  background-color: #ccc;
-  border-radius: 4px;
+/* --- ESTILO DE LOS ITEMS PADRE --- */
+.nav-list li {
+  width: 100%;
 }
 
-/* --- ITEMS PRINCIPALES --- */
-li a {
+.nav-list li a {
   display: flex;
-  align-items: center; /* Centrado verticalmente */
-  padding: 14px 24px;
-  color: var(--text-main);
+  align-items: center;
+  padding: 16px 20px;
+  color: #333;
   text-decoration: none;
-  font-weight: 500;
-  font-size: 1.8rem;
-  transition: all 0.2s ease-in-out;
-  border-left: 4px solid transparent; /* Preparado para el hover/active */
-}
-
-/* Hover suave */
-li a:hover {
-  background-color: var(--bg-hover);
-  color: var(--imss-green);
-}
-
-/* --- ESTADO ACTIVO (Lo que lo hace ver ejecutivo) --- */
-li a.active-link {
-  color: var(--imss-green);
-  background-color: var(--imss-green-light);
-  border-left-color: var(--imss-green);
   font-weight: 600;
+  font-size: 2.0 rem !important; /* Letra grande para visibilidad */
+  border-bottom: 1px solid #f0f0f0;
+  transition: all 0.2s ease;
+}
+
+.nav-list li a:hover {
+  background-color: #f8f9fa;
+  color: #621132; /* Guinda institucional */
+}
+
+/* Estado cuando la opción está seleccionada */
+.nav-list li a.active-link {
+  background-color: #f4f0f1;
+  color: #621132;
+  border-left: 6px solid #621132;
 }
 
 /* Iconos */
 .menu-icon {
-  width: 20px;
-  margin-right: 16px;
-  font-size: 1.5rem;
-  color: var(--text-muted);
-  text-align: center;
-  transition: color 0.2s;
+  width: 30px;
+  font-size: 1.6rem;
+  margin-right: 15px;
+  display: flex;
+  justify-content: center;
+  color: #555;
 }
 
-li a:hover .menu-icon,
-li a.active-link .menu-icon {
-  color: var(--imss-green);
+.nav-list li a:hover .menu-icon,
+.nav-list li a.active-link .menu-icon {
+  color: #621132;
 }
 
-.menu-text {
-  flex-grow: 1;
-  white-space: normal;
-  line-height: 1.3;
-}
-
-/* --- FLECHA --- */
-.submenu-arrow {
-  width: 12px;
-  height: 12px;
-  opacity: 0.5;
-  transition: transform 0.3s ease;
-}
-li.expanded > a > .submenu-arrow {
-  transform: rotate(90deg);
-  opacity: 1;
-}
-
-/* --- SUBMENÚ --- */
+/* --- SUBMENÚS (Dashboard, Usuarios) --- */
 .submenu {
   list-style: none;
   padding: 0;
-  background-color: #fcfcfc; /* Casi blanco, pero sutil diferencia */
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.4s cubic-bezier(0.86, 0, 0.07, 1); /* Animación 'slide' más natural */
-  box-shadow: inset 0 2px 4px rgba(0,0,0,0.02); /* Sombra interna sutil */
+  margin: 0;
+  background-color: #fafafa;
+  display: none; /* Oculto por defecto */
 }
 
+/* Se muestra cuando el padre tiene la clase 'expanded' */
 li.expanded > .submenu {
-  max-height: 500px;
+  display: block;
 }
 
-/* Items del Submenú */
 .submenu li a {
-
-  padding: 16px 20px 16px 64px;
-
-  font-size: 1.5rem;
-  font-weight: 400;
-  color: #555;
-  border-left: 4px solid transparent;
-
-  /* IMPORTANTE: Para que crezca si hay mucho texto */
-  display: flex;
-  align-items: center; /* Centra el texto verticalmente */
-  height: auto;
-  min-height: 50px; /* Altura mínima elegante */
-  line-height: 1.4; /* Mejora la lectura en dos líneas */
-
-  /* QUITA LAS LÍNEAS PUNTEADAS AL HACER CLIC */
-  outline: none;
-  text-decoration: none;
+  padding: 12px 20px 12px 65px !important; /* Sangría a la derecha */
+  font-size: 1.5rem !important;
+  font-weight: 500;
+  color: #666;
+  border: none;
 }
 
-.submenu li a:hover {
-  color: var(--text-main);
-  background-color: rgba(0,0,0,0.02);
-}
-
-/* Submenú Activo */
 .submenu li a.active-link {
-  color: var(--gov-guinda); /* Diferenciar submenú activo con el otro color institucional */
-  background-color: transparent;
-  border-left-color: transparent; /* No queremos doble barra lateral */
-  font-weight: 600;
-}
-/* Agregamos un punto o indicador al submenú activo */
-.submenu li a.active-link::before {
-  content: "•";
-  color: var(--gov-guinda);
-  position: absolute;
-  left: 45px;
-  font-size: 1.9rem;
-  line-height: 0;
-  top: 50%;
+  background-color: #eeeeee;
+  color: #621132;
+  border: none;
 }
 
+/* Flecha de expansión */
+.submenu-arrow {
+  margin-left: auto;
+  font-size: 0.8rem;
+  transition: transform 0.3s ease;
+}
 
-/* --- BOTÓN TOGGLE --- */
+li.expanded > a .submenu-arrow {
+  transform: rotate(180deg);
+}
+
+/* --- BOTÓN DE COLAPSAR (INFERIOR) --- */
 .menu-toggle-container {
   padding: 15px;
-  border-top: 1px solid var(--border-color);
-  display: flex;
-  justify-content: flex-end;
+  border-top: 1px solid #eee;
+  background-color: #fff;
 }
 
 .toggle-button {
-  width: 36px;
-  height: 36px;
-  border-radius: 6px;
-  border: 1px solid #e0e0e0;
-  background: #fff;
-  color: #666;
-  cursor: pointer;
+  width: 100%;
+  padding: 10px;
   display: flex;
-  align-items: center;
   justify-content: center;
+  align-items: center;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
   transition: all 0.2s;
 }
 
 .toggle-button:hover {
-  background: var(--bg-hover);
-  color: var(--imss-green);
-  border-color: var(--imss-green);
+  border-color: #621132;
+  color: #621132;
 }
 
-/* --- ESTILOS PARA MODO COLAPSADO --- */
-:host-context(.menu-collapsed) .menu-header {
-  justify-content: center;
-  padding: 0;
-}
-:host-context(.menu-collapsed) .app-logo span {
-  display: none;
-}
-:host-context(.menu-collapsed) .app-logo::after {
-  content: "S"; /* Mostrar solo la inicial */
-}
 
+
+/* 1. Esconder el texto y las flechas */
 :host-context(.menu-collapsed) .menu-text,
 :host-context(.menu-collapsed) .submenu-arrow {
-  display: none;
+  display: none !important;
 }
-:host-context(.menu-collapsed) li a {
-  padding: 15px 0;
-  justify-content: center;
-}
-:host-context(.menu-collapsed) .menu-icon {
-  margin-right: 0;
-  font-size: 1.5rem;
-}
+
+/* 2. Esconder submenús abiertos a la fuerza */
 :host-context(.menu-collapsed) .submenu {
   display: none !important;
 }
-:host-context(.menu-collapsed) .menu-toggle-container {
+
+/* 3. Centrar los iconos */
+:host-context(.menu-collapsed) .nav-list li a {
   justify-content: center;
+  padding: 15px 0;
 }
 
-/* Estilo para opciones inhibidas */
-.menu-item-disabled {
-    opacity: 0.5;
-    cursor: not-allowed !important;
-    pointer-events: none; /* Evita que el cursor reaccione */
-    background-color: transparent !important;
+/* 4. Quitar el margen derecho del icono para que quede centrado */
+:host-context(.menu-collapsed) .menu-icon {
+  margin-right: 0 !important;
+  font-size: 1.5rem; /* Un poco más grande para que se vea bien solo */
 }
 
-.menu-item-disabled .menu-text,
-.menu-item-disabled i {
-    color: #a0a0a0 !important; /* Gris claro */
-}
-
-/* Opcional: si quieres que al pasar el mouse no cambie el color */
-.menu-item-disabled:hover {
-    background-color: transparent !important;
+/* 5. Ajustar el botón de colapsar */
+:host-context(.menu-collapsed) .toggle-button {
+  padding: 10px 0;
 }

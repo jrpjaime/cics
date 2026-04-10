@@ -48,12 +48,7 @@ export const routes: Routes = [
           .then(m => m.UsuarioDetalleComponent)
       },
 
-      // D. Gestión Global de Permisos de Programas
-      {
-        path: 'admin/permisos',
-        loadComponent: () => import('./business/admin/permisos-admin/permisos-admin.component')
-          .then(m => m.PermisosAdminComponent)
-      },
+
       {
         path: 'admin/dashboard',
         loadComponent: () => import('./business/cics/monitoreo/monitoreo-dashboard/monitoreo-dashboard.component')

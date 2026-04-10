@@ -1,4 +1,4 @@
-<div class="container-fluid mt-3">
+<div class="container-fluid p-0">
 
   <!-- TÍTULO SEGÚN ESTÁNDAR CIT-DAT -->
   <div class="row">
@@ -62,7 +62,7 @@
             @for (u of usuarios; track u.ID_USUARIO_CICS) {
               <tr>
                 <td><strong>{{ u.CVE_USUARIO_API }}</strong></td>
-                
+
                 <!-- MOSTRAR NOMBRE Y APELLIDO DEL RESPONSABLE -->
                 <td>
                     {{ u.NOM_NOMBRE }} {{ u.NOM_APELLIDO_1 }}

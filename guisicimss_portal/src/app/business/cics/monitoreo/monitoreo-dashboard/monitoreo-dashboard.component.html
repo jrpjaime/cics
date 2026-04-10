@@ -1,4 +1,4 @@
-<div class="container mt-3 mb-5 pb-5">
+<div class="container-fluid p-0 mb-5">
 
   <!-- CABECERA: TÍTULO -->
   <div class="row">
@@ -43,7 +43,7 @@
 
   <!-- FILA 1: TARJETAS DE INDICADORES (KPIs) -->
   <div class="row mb-4">
-    
+
     <!-- CARGA DE TRABAJO -->
     <div class="col-md-3">
       <div class="kpi-container shadow-sm" style="background-color: #13322B;">
@@ -83,17 +83,17 @@
 
     <!-- LATENCIA MEDIA (CON MEDIDOR SEMÁFORO) -->
 <div class="col-md-3">
-  <div class="kpi-container shadow-sm" 
+  <div class="kpi-container shadow-sm"
        [style.background-color]="data.resumen?.LATENCIA_MEDIA > 12000 ? '#D43F3A' : (data.resumen?.LATENCIA_MEDIA > 5000 ? '#f0ad4e' : '#007bff')">
     <span class="kpi-title">Latencia Media (SLA)</span>
     <div class="kpi-big-number">{{ data.resumen?.LATENCIA_MEDIA || 0 | number }} <small style="font-size: 1rem;">ms</small></div>
-    
+
     <!-- MEDIDOR VISUAL RECALIBRADO -->
     <div class="latency-scale-container" style="position: relative; margin-top: 10px;">
       <div class="latency-bar"></div>
       <!-- El puntero se mueve en una escala de 30 segundos -->
       <div class="latency-pointer" [style.left.%]="getPosicionPuntero()"></div>
-      
+
       <div class="latency-markers text-white">
         <span>0s</span>
         <span>5s</span>
@@ -112,7 +112,7 @@
 
   <!-- FILA 2: TABLAS DE RENDIMIENTO Y ACTIVIDAD -->
   <div class="row mt-5">
-    
+
     <div class="col-md-4">
       <h4 class="border-bottom pb-2">Programas Demandados</h4>
       <table class="table table-striped table-bordered table-dashboard">
@@ -179,7 +179,7 @@
 
   <!-- FILA 3: BITÁCORA TÉCNICA Y DIAGNÓSTICO -->
   <div class="row mt-5">
-    
+
     <div class="col-md-4">
       <h4 class="border-bottom pb-2 text-danger">Fallas por Programa</h4>
       <table class="table table-bordered table-dashboard">
@@ -220,7 +220,7 @@
                 <td><code>{{ log.CVE_USUARIO_API }}</code></td>
                 <td class="text-danger">
                     <span class="error-diagnostico-txt">
-                        <i class="bi bi-exclamation-triangle-fill"></i> 
+                        <i class="bi bi-exclamation-triangle-fill"></i>
                         {{ log.ERROR_MSG || 'Timeout de Red (Sin respuesta del Host)' }}
                     </span>
                 </td>

@@ -1,35 +1,76 @@
-.page-body-container {
+/* Contenedor de la barra superior para que siempre esté arriba */
+.header-fixed-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 1100;
+  background-color: #fff;
+}
+
+/* Contenedor principal que empieza DEBAJO de la barra superior */
+
+
+
+
+
+/* Manejo de colapso */
+.menu-collapsed .sidebar-aside {
+  width: 80px;
+}
+
+
+
+.layout-wrapper {
   display: flex;
+  /* Reducimos este valor. Prueba con 68px o 70px */
+  margin-top: 68px !important;
+  min-height: calc(100vh - 68px);
+  width: 100%;
+  background-color: #fff;
   align-items: stretch;
-   box-sizing: border-box;
-   margin-top: 0px; 
+}
+
+.main-content {
+  flex-grow: 1;
+  min-width: 0;
+  /* Quitamos todo el padding superior para que el título pegue arriba */
+  padding: 0px 30px 30px 30px;
+  background-color: #fff;
+}
+
+.sidebar-aside {
+  width: 290px;
+  flex-shrink: 0;
+  border-right: 1px solid #ddd;
+  background-color: #fff;
+  /* Aseguramos que el menú tampoco tenga margen superior interno */
+  padding-top: 0;
 }
 
 
-.main-content-area {
-  flex-grow: 1;  /* Le dice al contenido que ocupe todo el espacio sobrante */
-  min-width: 0;  
-  transition: all 0.3s ease-in-out;
+
+.main-content h2 {
+  margin-top: 15px !important; /* Un margen pequeño solo para que no pegue al borde negro */
+  padding-top: 0;
 }
 
- 
-main.container-fluid {
-padding: 20px 50px; /* Un poco de espaciado interno  */
+.main-content hr.red {
+  margin-top: 5px;
+  margin-bottom: 20px;
 }
 
-@media (max-width: 992px) {
-  app-left-menu {
-    display: none; /*  ocultamos el menú */
-  }
+
+.sidebar-aside {
+  width: 290px;
+  flex-shrink: 0;
+  border-right: 1px solid #ddd;
+  background-color: #fff;
+  /* Transición suave */
+  transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden; /* Evita que el texto se vea un segundo mientras se cierra */
 }
 
-.modal-backdrop {
-  z-index: 1040 !important;
-}
-
-/*
-  Aseguramos que el modal esté por encima de TODO, incluido su propio fondo.
-*/
-.modal {
-  z-index: 1050 !important;
+.menu-collapsed .sidebar-aside {
+  width: 80px;
 }
